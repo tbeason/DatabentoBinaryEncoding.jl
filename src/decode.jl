@@ -730,6 +730,8 @@ end
     out_bytes      = read(decoder.io, sym_len)
     start_ts       = reinterpret(Int64, read(decoder.io, UInt64))
     end_ts         = reinterpret(Int64, read(decoder.io, UInt64))
+    # A v3 live gateway can emit an unset stype as 0xFF; SType.UNDEF (255) models
+    # that sentinel so this stays total instead of throwing on real captures.
     return SymbolMappingMsg(hd,
         SType.T(stype_in_raw),  intern_string(decoder, _trim_cstr(in_bytes)),
         SType.T(stype_out_raw), intern_string(decoder, _trim_cstr(out_bytes)),

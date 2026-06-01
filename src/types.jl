@@ -126,6 +126,10 @@ official Databento DBN spec — wire-encoded as a `UInt8` in metadata and in
 - `BBG_COMP_TICKER = 10`: Bloomberg composite ticker
 - `FIGI = 11`: OpenFIGI identifier
 - `FIGI_TICKER = 12`: OpenFIGI ticker
+- `UNDEF = 255`: Unset/undefined sentinel (`0xFF`). Databento wire-encodes an
+  unset `stype` as `0xFF`; this member lets non-nullable `stype` fields (e.g.
+  in `SymbolMappingMsg`) represent and round-trip that sentinel. Metadata's
+  nullable `stype_in` decodes `0xFF` to `nothing` instead.
 """
 @enumx SType::UInt8 begin
     INSTRUMENT_ID   = 0
@@ -141,6 +145,7 @@ official Databento DBN spec — wire-encoded as a `UInt8` in metadata and in
     BBG_COMP_TICKER = 10
     FIGI            = 11
     FIGI_TICKER     = 12
+    UNDEF           = 255  # 0xFF "unset" sentinel; see docstring
 end
 
 """
