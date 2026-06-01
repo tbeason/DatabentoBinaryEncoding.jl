@@ -13,7 +13,9 @@ For more details, read the [introduction to DBN](https://databento.com/docs/stan
 - ✅ Zstd file compression support (read and write)
 - ✅ Bidirectional format conversion (DBN ↔ JSON/Parquet/CSV)
 - ✅ Byte-for-byte compatibility with official implementations
-- ✅ All DBN message types (Trades, MBO, MBP, OHLCV, Status, etc.)
+- ✅ All DBN message types (Trades, MBO, MBP, OHLCV, definitions, statistics, imbalance, status)
+- ✅ Consolidated & BBO schemas (CBBO, CMBP-1, TCBBO, BBO-1s/1m)
+- ✅ Live control records (SymbolMappingMsg, SystemMsg, ErrorMsg), tolerant of v3 unset-`stype` sentinels
 - ✅ High-precision timestamp handling
 - ✅ Fixed-point price arithmetic
 
@@ -31,7 +33,14 @@ dbn version1.dbn --output version2.dbn --upgrade
 
 ## Installation
 
-This package is not yet registered. Install directly from GitHub:
+The package is registered in the General registry:
+
+```julia
+using Pkg
+Pkg.add("DatabentoBinaryEncoding")
+```
+
+Or, for the latest unreleased changes, install directly from GitHub:
 
 ```julia
 using Pkg

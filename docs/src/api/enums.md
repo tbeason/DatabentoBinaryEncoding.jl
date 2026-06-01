@@ -15,12 +15,18 @@ The `Schema` enum defines the available data schemas:
 - `MBO` - Market-by-order
 - `MBP_1` - Market-by-price (top of book)
 - `MBP_10` - Market-by-price (10 levels)
-- `TBBO` - Top-of-book BBO
+- `TBBO` - Top-of-book BBO (trade-sampled)
 - `TRADES` - Trade messages
 - `OHLCV_1S`, `OHLCV_1M`, `OHLCV_1H`, `OHLCV_1D` - OHLCV bars at different intervals
+- `DEFINITION` - Instrument definitions
+- `STATISTICS` - Publisher statistics
 - `STATUS` - Status messages
 - `IMBALANCE` - Imbalance messages
-- And more...
+- `CBBO`, `CBBO_1S`, `CBBO_1M` - Consolidated BBO (event, 1-second, 1-minute)
+- `CMBP_1` - Consolidated market-by-price (top of book)
+- `TCBBO` - Consolidated BBO (trade-sampled)
+- `BBO_1S`, `BBO_1M` - BBO at 1-second / 1-minute intervals
+- `MIX` - Mixed-schema stream (e.g. live captures interleaving data and control records)
 
 For complete schema details, see [Databento Schemas Documentation](https://databento.com/docs/schemas-and-data-formats/whats-a-schema).
 
@@ -45,11 +51,21 @@ Record types identify the message type in the binary format. Common values:
 SType
 ```
 
-Symbol types specify how instruments are identified:
-- `RAW_SYMBOL` - Raw symbol string
+Symbol types specify how instruments are identified. Numeric values match the
+official Databento DBN spec (wire-encoded as a `UInt8`):
 - `INSTRUMENT_ID` - Numeric instrument ID
-- `PARENT` - Parent instrument
-- And more...
+- `RAW_SYMBOL` - Raw symbol string from the exchange
+- `SMART` - Deprecated alias (split into `CONTINUOUS` and `PARENT`)
+- `CONTINUOUS` - Continuous contract symbol
+- `PARENT` - Parent symbol for derived instruments (e.g. `SPXW.OPT`)
+- `NASDAQ_SYMBOL`, `CMS_SYMBOL` - Venue-specific symbols
+- `ISIN`, `US_CODE` - Security identifiers
+- `BBG_COMP_ID`, `BBG_COMP_TICKER` - Bloomberg composite ID / ticker
+- `FIGI`, `FIGI_TICKER` - OpenFIGI identifier / ticker
+- `UNDEF` - Unset/undefined sentinel (`0xFF`). A v3 live gateway can wire-encode
+  an unset `stype` (e.g. on a `SymbolMappingMsg`); this member lets the decoder
+  represent it instead of erroring. The nullable metadata `stype_in` decodes
+  `0xFF` to `nothing` instead.
 
 ## Action Types
 
@@ -103,12 +119,17 @@ File encoding formats:
 InstrumentClass
 ```
 
-Instrument classification:
-- `STOCK` - Equity
-- `FUTURE` - Futures contract
-- `OPTION` - Options contract
-- `FX_SPOT` - Foreign exchange spot
-- And more...
+Instrument classification. Values match the Databento DBN single-character
+codes:
+- `STOCK` (`'K'`) - Equity
+- `CALL` (`'C'`) - Call option
+- `PUT` (`'P'`) - Put option
+- `FUTURE` (`'F'`) - Futures contract
+- `BOND` (`'B'`) - Fixed income
+- `FX_SPOT` (`'X'`) - Foreign exchange spot
+- `COMMODITY_SPOT` (`'Y'`) - Commodity spot
+- `MIXED_SPREAD` (`'M'`), `FUTURE_SPREAD` (`'S'`), `OPTION_SPREAD` (`'T'`) - Spreads
+- `OTHER` (`'?'`), `UNKNOWN_0`, `UNKNOWN_45` - Fallbacks for unclassified instruments
 
 ## Usage Examples
 

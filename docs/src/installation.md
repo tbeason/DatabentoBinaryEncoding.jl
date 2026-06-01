@@ -7,10 +7,16 @@
 
 ## Installing DatabentoBinaryEncoding.jl
 
-!!! note
-    DatabentoBinaryEncoding.jl is not yet registered in the Julia General registry. Install directly from GitHub.
+### From the General registry
+
+```julia
+using Pkg
+Pkg.add("DatabentoBinaryEncoding")
+```
 
 ### From GitHub
+
+For the latest unreleased changes, install directly from the repository:
 
 ```julia
 using Pkg
@@ -26,7 +32,7 @@ using Pkg
 Pkg.develop(url="https://github.com/tbeason/DatabentoBinaryEncoding.jl")
 ```
 
-This will clone the repository to `~/.julia/dev/DBN`.
+This will clone the repository to `~/.julia/dev/DatabentoBinaryEncoding`.
 
 ## Verifying Installation
 

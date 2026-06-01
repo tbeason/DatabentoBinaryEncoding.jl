@@ -6,7 +6,7 @@ Get up and running with DatabentoBinaryEncoding.jl in 5 minutes!
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/tbeason/DatabentoBinaryEncoding.jl")
+Pkg.add("DatabentoBinaryEncoding")
 ```
 
 ## Basic Usage
