@@ -159,12 +159,12 @@ df = records_to_dataframe(records)
 
 ```julia
 # Convert other formats to DBN
-json_to_dbn(\"trades.json\", \"trades.dbn\")
-parquet_to_dbn(\"trades.parquet\", \"trades.dbn\", schema=Schema.TRADES, dataset=\"XNAS\")
-csv_to_dbn(\"trades.csv\", \"trades.dbn\", schema=Schema.TRADES, dataset=\"XNAS\")
+json_to_dbn("trades.json", "trades.dbn")
+parquet_to_dbn("trades.parquet", "trades.dbn", schema=Schema.TRADES, dataset="XNAS")
+csv_to_dbn("trades.csv", "trades.dbn", schema=Schema.TRADES, dataset="XNAS")
 
 # JSONL format (one record per line) is also supported
-json_to_dbn(\"trades.jsonl\", \"trades.dbn\")
+json_to_dbn("trades.jsonl", "trades.dbn")
 ```
 
 ### Compression
