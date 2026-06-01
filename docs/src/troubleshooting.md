@@ -6,12 +6,13 @@ Common issues and solutions when working with DatabentoBinaryEncoding.jl.
 
 ### Package Not Found
 
-**Problem**: `ERROR: Package DBN not found`
+**Problem**: `ERROR: Package DatabentoBinaryEncoding not found`
 
-**Solution**: DatabentoBinaryEncoding.jl is not registered. Install from GitHub:
+**Solution**: Install it from the General registry (or from GitHub for unreleased changes):
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/tbeason/DatabentoBinaryEncoding.jl")
+Pkg.add("DatabentoBinaryEncoding")
+# or: Pkg.add(url="https://github.com/tbeason/DatabentoBinaryEncoding.jl")
 ```
 
 ### Dependency Conflicts
@@ -27,9 +28,9 @@ Pkg.resolve()  # Resolve conflicts
 
 If problems persist:
 ```julia
-Pkg.rm("DBN")
+Pkg.rm("DatabentoBinaryEncoding")
 Pkg.gc()  # Clean up
-Pkg.add(url="https://github.com/tbeason/DatabentoBinaryEncoding.jl")
+Pkg.add("DatabentoBinaryEncoding")
 ```
 
 ## Compression Issues

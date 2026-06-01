@@ -209,7 +209,7 @@ To compare with the official Rust implementation:
 time dbn dump test_data.dbn --output /dev/null
 
 # Benchmark Julia version
-julia -e 'using DBN; @time read_dbn("test_data.dbn")'
+julia -e 'using DatabentoBinaryEncoding; @time read_dbn("test_data.dbn")'
 ```
 
 ### Across Versions
