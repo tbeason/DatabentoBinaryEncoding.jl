@@ -191,6 +191,8 @@ ts = datetime_to_ts(DateTime(2021, 1, 1))  # Convert DateTime to nanoseconds
 
 ## License
 
-I am not affiliated with Databento.
+This package is released under the [MIT License](LICENSE).
 
-The official implementations for [dbn](https://github.com/databento/dbn) are distributed under the [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0.html).
+I am not affiliated with Databento. The official implementations for
+[dbn](https://github.com/databento/dbn) are distributed separately under the
+[Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0.html).
