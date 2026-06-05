@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-05
+
 ### Added
 
 - Compact, single-line `Base.show` for every DBN record type (and `RecordHeader`
@@ -54,7 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conversion to JSON/Parquet/CSV; byte-for-byte compatibility with the official
   Rust implementation ([#18], [#19]).
 
-[Unreleased]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/releases/tag/v0.1.0
