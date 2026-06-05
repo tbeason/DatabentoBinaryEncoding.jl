@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Compact, single-line `Base.show` for every DBN record type (and `RecordHeader`
+  / `BidAskPair`), replacing Julia's fully-qualified struct dump. Streaming a feed
+  (`for rec in ch; println(rec); end`) now renders readable lines such as
+  `Trade 2026-06-05T00:23:05.040049165 iid=42 side=ASK px=185.42 sz=100 seq=88213`,
+  with fixed-point prices decoded, full-nanosecond timestamps, and the unset
+  sentinels (`UNDEF_PRICE`, `UNDEF_TIMESTAMP`, `UNDEF_ORDER_SIZE`) shown as `-`.
+
 ## [0.1.2] - 2026-06-01
 
 ### Added
