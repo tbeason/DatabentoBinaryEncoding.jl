@@ -94,15 +94,17 @@ pp(x) = sprint(show, x)
         @test occursin("recv=$(ts_str)", s2)
     end
 
-    @testset "StatusMsg boolean flags" begin
+    @testset "StatusMsg c_char tri-state flags" begin
+        # Flags decode as c_char bytes 'Y'/'N'/not-available (see test_phase5.jl),
+        # NOT 0x01/0x00 — render 'Y'->true, 'N'->false, anything else (0x00/'~')->"-".
         r = DBN.StatusMsg(hd, UInt64(ts), UInt16(1), UInt16(0), UInt16(0),
-            0x01, 0x01, 0x00)
+            UInt8('Y'), UInt8('N'), 0x00)
         s = pp(r)
         @test startswith(s, "Status ")
         @test occursin("action=1", s)
-        @test occursin("trading=true", s)
-        @test occursin("quoting=true", s)
-        @test occursin("ssr=false", s)
+        @test occursin("trading=true", s)    # 'Y'
+        @test occursin("quoting=false", s)   # 'N'
+        @test occursin("ssr=-", s)           # not available
     end
 
     @testset "Control records lead with their payload" begin

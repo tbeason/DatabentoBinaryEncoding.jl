@@ -40,6 +40,15 @@ _pp_sz(s::Unsigned) = s == typemax(typeof(s)) ? _PP_UNDEF : string(s)
 # Signed quantity -> string; typemax(Int64) "unset" sentinel -> "-".
 _pp_qty(q::Integer) = q == typemax(Int64) ? _PP_UNDEF : string(q)
 
+# DBN status flags are c_char tri-states, decoded as the raw byte: 'Y' (0x59),
+# 'N' (0x4E), or "not available" ('~' / 0x00 / anything else). Comparing against
+# 1 would mis-read the canonical 'Y'/'N' bytes, so match the characters.
+function _pp_tristate(b::UInt8)
+    b == UInt8('Y') && return "true"
+    b == UInt8('N') && return "false"
+    return _PP_UNDEF
+end
+
 # Nanosecond timestamp (Int64 or UInt64) -> "YYYY-MM-DDThh:mm:ss.fffffffff".
 # Guards the typemax sentinel *before* the Int64 cast so a UInt64 `ts_recv` left
 # as typemax(UInt64) does not throw InexactError on conversion.
@@ -136,12 +145,12 @@ function Base.show(io::IO, r::ImbalanceMsg)
 end
 
 # action/reason/trading_event are UInt16 venue codes (NOT the Action enum, despite
-# the field name). The is_* flags are UInt8 tri-state c_chars; `== 1` -> clean bool.
+# the field name). The is_* flags are UInt8 c_char tri-states ('Y'/'N'/not-avail).
 function Base.show(io::IO, r::StatusMsg)
     print(io, "Status ", _pp_ts(r.hd.ts_event), " iid=", r.hd.instrument_id,
         " action=", r.action, " reason=", r.reason,
-        " trading=", r.is_trading == 1, " quoting=", r.is_quoting == 1,
-        " ssr=", r.is_short_sell_restricted == 1)
+        " trading=", _pp_tristate(r.is_trading), " quoting=", _pp_tristate(r.is_quoting),
+        " ssr=", _pp_tristate(r.is_short_sell_restricted))
 end
 
 # --- control / system (gateway-wide, not instrument-scoped) ---
