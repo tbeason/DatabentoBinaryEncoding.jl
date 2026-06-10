@@ -654,10 +654,12 @@ end
     stat_flags = read(decoder.io, UInt8)
     # Skip reserved tail: whatever the header says is left of the record
     skip(decoder.io, body_size - (body_size == 48 ? 42 : 46))
-    # Upgrade pre-v3 records to the v3 size so re-encoding stays consistent
-    out_hd = body_size == 48 ?
-             RecordHeader(UInt8(80 ÷ LENGTH_MULTIPLIER), hd.rtype, hd.publisher_id, hd.instrument_id, hd.ts_event) :
-             hd
+    # Normalize the header to the v3 size whenever the on-disk size differed
+    # (pre-v3 upgrade, or an extended record whose tail we discarded above),
+    # so re-encoding the 64-byte v3 body stays self-consistent
+    v3_length = UInt8(80 ÷ LENGTH_MULTIPLIER)
+    out_hd = hd.length == v3_length ? hd :
+             RecordHeader(v3_length, hd.rtype, hd.publisher_id, hd.instrument_id, hd.ts_event)
     return StatMsg(out_hd, ts_recv, ts_ref, price, quantity, sequence, ts_in_delta, stat_type, channel_id, update_action, stat_flags)
 end
 
@@ -1424,8 +1426,11 @@ function read_dbn_typed(filename::String, ::Type{T}) where T
                     end
                 end
 
-                # Read record directly - uses same helpers as streaming
-                @inbounds records[idx] = _read_typed_record_stream(decoder, T, hd)
+                # Read record directly - uses same helpers as streaming.
+                # A reader can return nothing for a malformed record it skipped.
+                rec = _read_typed_record_stream(decoder, T, hd)
+                rec === nothing && continue
+                @inbounds records[idx] = rec
                 idx += 1
             end
 
@@ -1470,7 +1475,9 @@ function read_dbn_typed(filename::String, ::Type{T}) where T
                     end
                 end
 
-                push!(records, _read_typed_record_stream(decoder, T, hd))
+                # A reader can return nothing for a malformed record it skipped.
+                rec = _read_typed_record_stream(decoder, T, hd)
+                rec === nothing || push!(records, rec)
             end
         finally
             if decoder.io !== decoder.base_io

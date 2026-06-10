@@ -101,6 +101,58 @@
         finally
             safe_rm(tmp)
         end
+
+        # A malformed StatMsg (body size that matches no known layout) is
+        # skipped — including on the typed read_dbn path — and an extended
+        # record (v3 body + vendor tail) decodes with its header normalized
+        # to the v3 size so re-encoding cannot misalign downstream readers.
+        io = IOBuffer()
+        encoder = DBNEncoder(io, stat_metadata())
+        write_header(encoder)
+        # Malformed: claims 72 bytes total = 56-byte body (not 48, not >=64)
+        write(io, UInt8(18))
+        write(io, UInt8(RType.STAT_MSG))
+        write(io, UInt16(1)); write(io, UInt32(40)); write(io, ts0)
+        write(io, zeros(UInt8, 56))
+        # Extended v3: 88 bytes total = 72-byte body (64 v3 + 8 vendor tail)
+        write(io, UInt8(22))
+        write(io, UInt8(RType.STAT_MSG))
+        write(io, UInt16(1)); write(io, UInt32(41)); write(io, ts0)
+        write(io, UInt64(ts0 + 1))                # ts_recv
+        write(io, UInt64(ts0 + 2))                # ts_ref
+        write(io, Int64(100_000_000_000))         # price
+        write(io, Int64(777))                     # quantity (Int64 in v3)
+        write(io, UInt32(9))                      # sequence
+        write(io, Int32(100))                     # ts_in_delta
+        write(io, UInt16(9))                      # stat_type
+        write(io, UInt16(0))                      # channel_id
+        write(io, UInt8(1))                       # update_action
+        write(io, UInt8(0))                       # stat_flags
+        write(io, zeros(UInt8, 18 + 8))           # reserved + vendor tail
+        # Trailing plain v3 record proves neither of the above desynced
+        write(io, UInt8(20))
+        write(io, UInt8(RType.STAT_MSG))
+        write(io, UInt16(1)); write(io, UInt32(42)); write(io, ts0)
+        write(io, UInt64(ts0 + 1)); write(io, UInt64(ts0 + 2))
+        write(io, Int64(100_000_000_000)); write(io, Int64(888))
+        write(io, UInt32(10)); write(io, Int32(100))
+        write(io, UInt16(9)); write(io, UInt16(0))
+        write(io, UInt8(1)); write(io, UInt8(0))
+        write(io, zeros(UInt8, 18))
+
+        tmp = tempname() * ".dbn"
+        try
+            write(tmp, take!(io))
+            recs = read_dbn(tmp)   # STATISTICS schema -> typed StatMsg path
+            @test length(recs) == 2          # malformed record skipped
+            @test recs[1].hd.instrument_id == 41
+            @test recs[1].quantity == 777
+            @test recs[1].hd.length == UInt8(20)   # extended header normalized
+            @test recs[2].hd.instrument_id == 42
+            @test recs[2].quantity == 888
+        finally
+            safe_rm(tmp)
+        end
     end
 
     @testset "issue #33: stat_to_dataframe uses real StatMsg fields" begin
