@@ -154,9 +154,17 @@ function write_header(encoder::DBNEncoder)
         write(metadata_buf, sym_bytes)
     end
     
-    # Symbol mappings - need to write the exact format the reader expects
-    write(metadata_buf, htol(UInt32(length(encoder.metadata.mappings))))
+    # Symbol mappings - mappings holds one tuple per (raw symbol, interval), so
+    # group consecutive tuples sharing a raw symbol into one entry with N intervals
+    mapping_groups = Tuple{String,Vector{Tuple{String,Int64,Int64}}}[]
     for (raw_symbol, mapped_symbol, start_date, end_date) in encoder.metadata.mappings
+        if isempty(mapping_groups) || mapping_groups[end][1] != raw_symbol
+            push!(mapping_groups, (raw_symbol, Tuple{String,Int64,Int64}[]))
+        end
+        push!(mapping_groups[end][2], (mapped_symbol, start_date, end_date))
+    end
+    write(metadata_buf, htol(UInt32(length(mapping_groups))))
+    for (raw_symbol, intervals) in mapping_groups
         # Raw symbol (fixed length)
         raw_sym_bytes = Vector{UInt8}(undef, symbol_cstr_len)
         fill!(raw_sym_bytes, 0)
@@ -166,25 +174,27 @@ function write_header(encoder::DBNEncoder)
             raw_sym_bytes[1:copy_len] = raw_str_bytes[1:copy_len]
         end
         write(metadata_buf, raw_sym_bytes)
-        
-        # Intervals count (1 interval per mapping for simplicity)
-        write(metadata_buf, htol(UInt32(1)))
-        
-        # Start date (4 bytes)
-        write(metadata_buf, htol(UInt32(start_date)))
-        
-        # End date (4 bytes)
-        write(metadata_buf, htol(UInt32(end_date)))
-        
-        # Mapped symbol (fixed length)
-        mapped_sym_bytes = Vector{UInt8}(undef, symbol_cstr_len)
-        fill!(mapped_sym_bytes, 0)
-        mapped_str_bytes = Vector{UInt8}(mapped_symbol)
-        copy_len = min(length(mapped_str_bytes), symbol_cstr_len - 1)
-        if copy_len > 0
-            mapped_sym_bytes[1:copy_len] = mapped_str_bytes[1:copy_len]
+
+        # Intervals count
+        write(metadata_buf, htol(UInt32(length(intervals))))
+
+        for (mapped_symbol, start_date, end_date) in intervals
+            # Start date (4 bytes)
+            write(metadata_buf, htol(UInt32(start_date)))
+
+            # End date (4 bytes)
+            write(metadata_buf, htol(UInt32(end_date)))
+
+            # Mapped symbol (fixed length)
+            mapped_sym_bytes = Vector{UInt8}(undef, symbol_cstr_len)
+            fill!(mapped_sym_bytes, 0)
+            mapped_str_bytes = Vector{UInt8}(mapped_symbol)
+            copy_len = min(length(mapped_str_bytes), symbol_cstr_len - 1)
+            if copy_len > 0
+                mapped_sym_bytes[1:copy_len] = mapped_str_bytes[1:copy_len]
+            end
+            write(metadata_buf, mapped_sym_bytes)
         end
-        write(metadata_buf, mapped_sym_bytes)
     end
     
     # Get metadata bytes and write length + metadata

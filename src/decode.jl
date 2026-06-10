@@ -16,26 +16,6 @@ Finds the first null byte and creates string from valid data only.
 end
 
 """
-    unsafe_action(raw_val::UInt8) -> Action.T
-
-Fast enum conversion without safety checks. 1000x+ faster than safe_action.
-Only use when you know the data is well-formed (e.g., reading from trusted DBN files).
-"""
-@inline function unsafe_action(raw_val::UInt8)
-    return raw_val == 0x00 ? Action.NONE : Action.T(raw_val)
-end
-
-"""
-    unsafe_side(raw_val::UInt8) -> Side.T
-
-Fast enum conversion without safety checks. 1000x+ faster than safe_side.
-Only use when you know the data is well-formed (e.g., reading from trusted DBN files).
-"""
-@inline function unsafe_side(raw_val::UInt8)
-    return raw_val == 0x00 ? Side.NONE : Side.T(raw_val)
-end
-
-"""
     DBNDecoder
 
 Decoder for reading DBN (Databento Binary Encoding) files with support for compression.
@@ -339,17 +319,17 @@ function read_header!(decoder::DBNDecoder)
         # Intervals count
         intervals_count = ltoh(reinterpret(UInt32, metadata_bytes[pos:pos+3])[1])
         pos += 4
-        
-        # For now, just read the first interval (simplified)
-        if intervals_count > 0
+
+        # One mappings entry per interval (roll history for continuous symbols)
+        for _ in 1:intervals_count
             # Start date (4 bytes)
             start_date_raw = ltoh(reinterpret(UInt32, metadata_bytes[pos:pos+3])[1])
             pos += 4
-            
+
             # End date (4 bytes)
             end_date_raw = ltoh(reinterpret(UInt32, metadata_bytes[pos:pos+3])[1])
             pos += 4
-            
+
             # Mapped symbol
             mapped_symbol_bytes = metadata_bytes[pos:pos+symbol_cstr_len-1]
             pos += symbol_cstr_len
@@ -359,13 +339,8 @@ function read_header!(decoder::DBNDecoder)
             else
                 mapped_symbol = String(mapped_symbol_bytes)
             end
-            
+
             push!(mappings, (raw_symbol, mapped_symbol, Int64(start_date_raw), Int64(end_date_raw)))
-            
-            # Skip remaining intervals for now
-            for _ in 2:intervals_count
-                pos += 4 + 4 + symbol_cstr_len  # start_date + end_date + symbol
-            end
         end
     end
     
@@ -533,8 +508,8 @@ end
     size = read(decoder.io, UInt32)        # 4 bytes (positions 32-35)
     flags = read(decoder.io, UInt8)        # 1 byte (position 36)
     channel_id = read(decoder.io, UInt8)   # 1 byte (position 37)
-    action = unsafe_action(read(decoder.io, UInt8))   # 1 byte (position 38)
-    side = unsafe_side(read(decoder.io, UInt8))       # 1 byte (position 39)
+    action = safe_action(read(decoder.io, UInt8))   # 1 byte (position 38)
+    side = safe_side(read(decoder.io, UInt8))       # 1 byte (position 39)
     price = read(decoder.io, Int64)        # 8 bytes (positions 40-47)
     ts_in_delta = read(decoder.io, Int32)  # 4 bytes (positions 48-51)
     sequence = read(decoder.io, UInt32)    # 4 bytes (positions 52-55)
@@ -545,8 +520,8 @@ end
 @inline function read_trade_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -558,8 +533,8 @@ end
 @inline function read_mbp1_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -580,8 +555,8 @@ end
 @inline function read_mbp10_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -637,7 +612,7 @@ end
     market_imbalance_qty = read(decoder.io, UInt32)
     unpaired_qty = read(decoder.io, UInt32)
     auction_type = read(decoder.io, UInt8)
-    side = unsafe_side(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     auction_status = read(decoder.io, UInt8)
     freeze_status = read(decoder.io, UInt8)
     num_extensions = read(decoder.io, UInt8)
@@ -648,17 +623,28 @@ end
 end
 
 @inline function read_stat_msg(decoder::DBNDecoder, hd::RecordHeader)
+    # StatMsg layout depends on DBN version. Per the public spec:
+    #   v1/v2: ts_recv(8) ts_ref(8) price(8) quantity(4, Int32) sequence(4)
+    #          ts_in_delta(4) stat_type(2) channel_id(2) update_action(1)
+    #          stat_flags(1) reserved(6) = 48-byte body
+    #   v3:    same but quantity(8, Int64) and reserved(18) = 64-byte body
+    body_size = Int(hd.length) * LENGTH_MULTIPLIER - 16
+    if body_size != 48 && body_size < 64
+        @warn "Unexpected StatMsg body size $body_size; skipping record" maxlog = 1
+        skip(decoder.io, body_size)
+        return nothing
+    end
     ts_recv = read(decoder.io, UInt64)
-    ts_ref = read(decoder.io, UInt64) 
+    ts_ref = read(decoder.io, UInt64)
     price = read(decoder.io, Int64)
-    # Handle UNDEF values in quantity field - read as UInt64 first
-    quantity_raw = read(decoder.io, UInt64)
-    quantity = if quantity_raw == 0xffffffffffffffff
-        # UNDEF_STAT_QUANTITY - use a special value or convert safely
-        typemax(Int64)  
+    quantity = if body_size == 48
+        # v1/v2: 32-bit quantity, UNDEF_STAT_QUANTITY = typemax(Int32)
+        quantity_raw = read(decoder.io, Int32)
+        quantity_raw == typemax(Int32) ? typemax(Int64) : Int64(quantity_raw)
     else
-        # Safe conversion for normal values
-        quantity_raw <= typemax(Int64) ? Int64(quantity_raw) : typemax(Int64)
+        # v3: 64-bit quantity, UNDEF_STAT_QUANTITY = typemax(Int64)
+        quantity_raw = read(decoder.io, UInt64)
+        quantity_raw >= 0x7fffffffffffffff ? typemax(Int64) : Int64(quantity_raw)
     end
     sequence = read(decoder.io, UInt32)
     ts_in_delta = read(decoder.io, Int32)
@@ -666,8 +652,13 @@ end
     channel_id = read(decoder.io, UInt16)
     update_action = read(decoder.io, UInt8)
     stat_flags = read(decoder.io, UInt8)
-    _ = read(decoder.io, 18)  # Reserved (adjusted for field size changes)
-    return StatMsg(hd, ts_recv, ts_ref, price, quantity, sequence, ts_in_delta, stat_type, channel_id, update_action, stat_flags)
+    # Skip reserved tail: whatever the header says is left of the record
+    skip(decoder.io, body_size - (body_size == 48 ? 42 : 46))
+    # Upgrade pre-v3 records to the v3 size so re-encoding stays consistent
+    out_hd = body_size == 48 ?
+             RecordHeader(UInt8(80 ÷ LENGTH_MULTIPLIER), hd.rtype, hd.publisher_id, hd.instrument_id, hd.ts_event) :
+             hd
+    return StatMsg(out_hd, ts_recv, ts_ref, price, quantity, sequence, ts_in_delta, stat_type, channel_id, update_action, stat_flags)
 end
 
 @inline function read_error_msg(decoder::DBNDecoder, hd::RecordHeader)
@@ -775,8 +766,8 @@ end
 @inline function read_cmbp1_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -797,8 +788,8 @@ end
 @inline function read_cbbo1s_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -819,8 +810,8 @@ end
 @inline function read_cbbo1m_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -841,8 +832,8 @@ end
 @inline function read_tcbbo_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -863,8 +854,8 @@ end
 @inline function read_bbo1s_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -885,8 +876,8 @@ end
 @inline function read_bbo1m_msg(decoder::DBNDecoder, hd::RecordHeader)
     price = read(decoder.io, Int64)
     size = read(decoder.io, UInt32)
-    action = unsafe_action(read(decoder.io, UInt8))
-    side = unsafe_side(read(decoder.io, UInt8))
+    action = safe_action(read(decoder.io, UInt8))
+    side = safe_side(read(decoder.io, UInt8))
     flags = read(decoder.io, UInt8)
     depth = read(decoder.io, UInt8)
     ts_recv = read(decoder.io, Int64)
@@ -1108,7 +1099,7 @@ end
     leg_instrument_class_byte = read(decoder.io, UInt8)
     leg_instrument_class = safe_instrument_class(leg_instrument_class_byte)
     leg_side_byte = read(decoder.io, UInt8)
-    leg_side = unsafe_side(leg_side_byte)
+    leg_side = safe_side(leg_side_byte)
 
     # v3: 17 bytes _reserved
     skip(decoder.io, 17)

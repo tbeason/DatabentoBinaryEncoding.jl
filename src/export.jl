@@ -289,11 +289,15 @@ function stat_to_dataframe(records::Vector{StatMsg})
     DataFrame(
         ts_event = [r.hd.ts_event for r in records],
         ts_recv = [r.ts_recv for r in records],
+        ts_ref = [r.ts_ref for r in records],
         instrument_id = [r.hd.instrument_id for r in records],
         publisher_id = [r.hd.publisher_id for r in records],
         stat_type = [r.stat_type for r in records],
-        stat_value = [r.stat_value for r in records],
-        flags = [r.flags for r in records],
+        channel_id = [r.channel_id for r in records],
+        update_action = [r.update_action for r in records],
+        price = [price_to_float(r.price) for r in records],
+        quantity = [r.quantity for r in records],
+        flags = [r.stat_flags for r in records],
         ts_in_delta = [r.ts_in_delta for r in records],
         sequence = [r.sequence for r in records]
     )
