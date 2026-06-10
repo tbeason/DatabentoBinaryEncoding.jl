@@ -326,7 +326,11 @@ Metadata information for a DBN dataset.
 - `symbols::Vector{String}`: List of symbols in the dataset
 - `partial::Vector{String}`: Partially available symbols
 - `not_found::Vector{String}`: Symbols that were not found
-- `mappings::Vector{Tuple{String,String,Int64,Int64}}`: Symbol mappings with time ranges
+- `mappings::Vector{Tuple{String,String,Int64,Int64}}`: Symbol mappings as
+  `(raw_symbol, mapped_symbol, start_date, end_date)`, one tuple per mapping
+  interval. A symbol with multiple intervals (e.g. a continuous contract's roll
+  history) contributes consecutive tuples sharing the same raw symbol. Dates
+  are raw `YYYYMMDD` integers.
 """
 struct Metadata
     version::UInt8
@@ -595,76 +599,69 @@ function float_to_price(value::Float64, scale::Int32=FIXED_PRICE_SCALE)
     return Int64(round(value * Float64(scale)))
 end
 
-# Helper functions for safe enum conversion
+# Helper functions for safe enum conversion.
+# All enums share one policy: an invalid byte warns (once per enum) and maps to
+# a sentinel value instead of throwing, so one bad byte can't kill a decode
+# stream. Lookup tables keep the hot path free of try/catch.
+
+function _build_enum_lookup(::Type{E}, default::E) where {E}
+    table = fill(default, 256)
+    valid = falses(256)
+    for inst in instances(E)
+        idx = Int(UInt8(inst)) + 1
+        table[idx] = inst
+        valid[idx] = true
+    end
+    return table, valid
+end
+
+const _ACTION_LOOKUP, _ACTION_VALID = _build_enum_lookup(Action.T, Action.NONE)
+const _SIDE_LOOKUP, _SIDE_VALID = _build_enum_lookup(Side.T, Side.NONE)
+const _INSTRUMENT_CLASS_LOOKUP, _INSTRUMENT_CLASS_VALID =
+    _build_enum_lookup(InstrumentClass.T, InstrumentClass.OTHER)
 
 """
     safe_action(raw_val::UInt8)
 
-Safely convert a raw byte value to an Action enum, with fallback handling.
-
-# Arguments
-- `raw_val::UInt8`: Raw action value from DBN data
-
-# Returns
-- `Action.T`: Corresponding Action enum value, or Action.TRADE as fallback
+Convert a raw byte value to an Action enum. `0x00` and invalid values map to
+`Action.NONE`; invalid values additionally log a warning (once).
 """
-function safe_action(raw_val::UInt8)
-    # Special case: 0 might indicate no action for certain record types
-    if raw_val == 0
-        return Action.NONE
+@inline function safe_action(raw_val::UInt8)
+    # 0 indicates no action for certain record types
+    raw_val == 0x00 && return Action.NONE
+    idx = Int(raw_val) + 1
+    @inbounds if !_ACTION_VALID[idx]
+        @warn "Unknown Action value: $raw_val (0x$(string(raw_val, base=16))), using NONE as default" maxlog = 1
     end
-    
-    try
-        return Action.T(raw_val)
-    catch ArgumentError
-        # For unknown action values, use a default or create a placeholder
-        # For now, return TRADE as a safe default
-        @warn "Unknown Action value: $raw_val (0x$(string(raw_val, base=16))), using TRADE as default"
-        return Action.TRADE
-    end
+    return @inbounds _ACTION_LOOKUP[idx]
 end
 
 """
     safe_side(raw_val::UInt8)
 
-Safely convert a raw byte value to a Side enum, with fallback handling.
-
-# Arguments
-- `raw_val::UInt8`: Raw side value from DBN data
-
-# Returns
-- `Side.T`: Corresponding Side enum value, or Side.NONE as fallback
+Convert a raw byte value to a Side enum. `0x00` and invalid values map to
+`Side.NONE`; invalid values additionally log a warning (once).
 """
-function safe_side(raw_val::UInt8)
-    # Special case: 0 might indicate no side for certain record types
-    if raw_val == 0
-        return Side.NONE
+@inline function safe_side(raw_val::UInt8)
+    # 0 indicates no side for certain record types
+    raw_val == 0x00 && return Side.NONE
+    idx = Int(raw_val) + 1
+    @inbounds if !_SIDE_VALID[idx]
+        @warn "Unknown Side value: $raw_val (0x$(string(raw_val, base=16))), using NONE as default" maxlog = 1
     end
-
-    try
-        return Side.T(raw_val)
-    catch ArgumentError
-        @warn "Unknown Side value: $raw_val, using NONE as default"
-        return Side.NONE
-    end
+    return @inbounds _SIDE_LOOKUP[idx]
 end
 
 """
     safe_instrument_class(raw_val::UInt8)
 
-Safely convert a raw byte value to an InstrumentClass enum, with fallback handling.
-
-# Arguments
-- `raw_val::UInt8`: Raw instrument class value from DBN data
-
-# Returns
-- `InstrumentClass.T`: Corresponding InstrumentClass enum value, or InstrumentClass.OTHER as fallback
+Convert a raw byte value to an InstrumentClass enum. Invalid values log a
+warning (once) and map to `InstrumentClass.OTHER`.
 """
-function safe_instrument_class(raw_val::UInt8)
-    try
-        return InstrumentClass.T(raw_val)
-    catch ArgumentError
-        @warn "Unknown InstrumentClass value: $raw_val, using OTHER as default"
-        return InstrumentClass.OTHER
+@inline function safe_instrument_class(raw_val::UInt8)
+    idx = Int(raw_val) + 1
+    @inbounds if !_INSTRUMENT_CLASS_VALID[idx]
+        @warn "Unknown InstrumentClass value: $raw_val (0x$(string(raw_val, base=16))), using OTHER as default" maxlog = 1
     end
+    return @inbounds _INSTRUMENT_CLASS_LOOKUP[idx]
 end

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `read_stat_msg` now sizes the record body from `hd.length` instead of assuming
+  the 80-byte DBN v3 layout. Pre-v3 64-byte `StatMsg` records (32-bit `quantity`,
+  as currently served by the historical gateway for STATISTICS) decode correctly
+  and are upgraded to the v3 shape, instead of overrunning the record boundary
+  and desyncing every subsequent record in the stream ([#32]).
+- `stat_to_dataframe` no longer references nonexistent `StatMsg` fields
+  (`stat_value`, `flags`); STATISTICS records export with `price`, `quantity`,
+  `flags` (from `stat_flags`), `ts_ref`, `stat_type`, `channel_id`, and
+  `update_action` columns ([#33]).
+- The metadata decoder reads **all** symbol-mapping intervals instead of only
+  the first. `Metadata.mappings` now holds one
+  `(raw_symbol, mapped_symbol, start_date, end_date)` tuple per interval, so a
+  continuous contract's full roll history survives decoding; the encoder groups
+  consecutive same-symbol tuples back into one mapping entry ([#34]).
+- Invalid enum bytes are handled uniformly: `Side`, `Action`, and
+  `InstrumentClass` all warn (once) and fall back to a sentinel
+  (`Side.NONE`, `Action.NONE`, `InstrumentClass.OTHER`) instead of `Side`/
+  `Action` throwing and killing the decode stream. The conversions use lookup
+  tables, so the hot path stays free of `try`/`catch`. The old `safe_action`
+  fallback of `Action.TRADE` was changed to `Action.NONE` ([#35]).
+
 ## [0.1.3] - 2026-06-05
 
 ### Added
@@ -67,3 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#22]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/pull/22
 [#23]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/23
 [#24]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/pull/24
+[#32]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/32
+[#33]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/33
+[#34]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/34
+[#35]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/35

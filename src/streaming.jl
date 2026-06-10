@@ -336,8 +336,11 @@ function _foreach_record_impl(f::Function, decoder::DBNDecoder, ::Type{T}) where
                 end
             end
 
-            # Read record directly into buffer
-            buffer[] = _read_typed_record_stream(decoder, T, hd)
+            # Read record directly into buffer.
+            # A reader can return nothing for a malformed record it skipped.
+            rec = _read_typed_record_stream(decoder, T, hd)
+            rec === nothing && continue
+            buffer[] = rec
 
             # Call user function with buffer contents
             f(buffer[])
@@ -433,7 +436,10 @@ function _foreach_record_with_control_impl(f_data::Function, f_control::Function
                                                       RType.OHLCV_1H_MSG,
                                                       RType.OHLCV_1D_MSG))
             if is_match
-                buffer[] = _read_typed_record_stream(decoder, T, hd)
+                # A reader can return nothing for a malformed record it skipped.
+                rec = _read_typed_record_stream(decoder, T, hd)
+                rec === nothing && continue
+                buffer[] = rec
                 f_data(buffer[])
                 continue
             end
