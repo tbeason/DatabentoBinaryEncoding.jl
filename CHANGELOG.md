@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Symbol resolution helpers that join the human-readable `raw_symbol` back onto
+  records using `Metadata.mappings`: `symbol_map(metadata)` builds an
+  `instrument_id -> [(start_date, end_date, raw_symbol)]` lookup,
+  `symbol_for(map_or_metadata, instrument_id, ts_event)` resolves the symbol
+  valid at a record's timestamp, `add_symbol_column!(df, metadata)` joins a
+  `:symbol` column onto a records DataFrame in place, and
+  `records_to_dataframe(records, metadata; symbols=true)` does the conversion +
+  join in one call. The join keys on `instrument_id`/`ts_event` (so it also works
+  for the row-expanded MBP-10 frame) and only applies when the query was resolved
+  with `stype_out = SType.INSTRUMENT_ID`.
+
 ### Fixed
 
 - `read_stat_msg` now sizes the record body from `hd.length` instead of assuming

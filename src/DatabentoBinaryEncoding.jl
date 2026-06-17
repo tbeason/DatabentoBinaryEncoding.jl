@@ -99,6 +99,7 @@ include("decode.jl")
 include("encode.jl")
 include("streaming.jl")
 include("export.jl")
+include("symbols.jl")
 include("import.jl")
 
 # Exports
@@ -123,6 +124,7 @@ export DBN_VERSION, FIXED_PRICE_SCALE, UNDEF_PRICE, UNDEF_ORDER_SIZE, UNDEF_TIME
 export BidAskPair, VersionUpgradePolicy, DatasetCondition
 export write_header, read_header!, write_record, read_record, finalize_encoder
 export dbn_to_csv, dbn_to_json, dbn_to_parquet, records_to_dataframe
+export symbol_map, symbol_for, add_symbol_column!
 export json_to_dbn, parquet_to_dbn, csv_to_dbn
 
 end  # module DatabentoBinaryEncoding
