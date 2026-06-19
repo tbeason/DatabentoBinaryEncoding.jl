@@ -25,7 +25,7 @@ jobs:
           - macOS-latest
           - windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Install Rust for compatibility tests with official dbn-cli
       - name: Install Rust toolchain
