@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `records_to_dataframe` (and therefore `to_dataframe` / `dbn_to_parquet`) no
+  longer throws `FieldError` on **TBBO / MBP-1** and **MBP-10**. The converters
+  read non-existent flat `bid_px_00…` fields; the bid/ask data actually lives in
+  the nested `levels::BidAskPair` (MBP-1) / `levels::NTuple{10,BidAskPair}`
+  (MBP-10). MBP-1 now reads through `levels`, MBP-10 indexes the level tuple, and
+  the consolidated/BBO family (`CMBP1Msg`, `TCBBOMsg`, `CBBO1sMsg`, `CBBO1mMsg`,
+  `BBO1sMsg`, `BBO1mMsg`) — which share the MBP-1 layout — now route to the same
+  converter instead of falling through to the generic mixed-record path ([#40]).
 - `read_stat_msg` now sizes the record body from `hd.length` instead of assuming
   the 80-byte DBN v3 layout. Pre-v3 64-byte `StatMsg` records (32-bit `quantity`,
   as currently served by the historical gateway for STATISTICS) decode correctly
@@ -107,3 +115,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#33]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/33
 [#34]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/34
 [#35]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/35
+[#40]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/issues/40
