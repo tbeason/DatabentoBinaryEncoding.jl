@@ -22,6 +22,7 @@ include("test_utils.jl")
     include("test_issue23_unset_stype.jl")  # regression: 0xFF unset stype in v3 SymbolMappingMsg (issue #23)
     include("test_issues_32_35.jl")  # regressions: pre-v3 StatMsg layout, stat_to_dataframe, mapping intervals, invalid enum bytes (issues #32-#35)
     include("test_show.jl")  # compact one-line Base.show for record types
+    include("test_symbols.jl")  # symbol_map / symbol_for / add_symbol_column! / records_to_dataframe(records, metadata)
 
     # Run compatibility tests if the Rust CLI is available
     dbn_cli_path = if Sys.iswindows()

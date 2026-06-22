@@ -11,6 +11,17 @@ dbn_to_parquet
 records_to_dataframe
 ```
 
+## Symbol Resolution
+
+Join the human-readable `raw_symbol` back onto records (which carry only the
+opaque numeric `instrument_id`) using `Metadata.mappings`.
+
+```@docs
+symbol_map
+symbol_for
+add_symbol_column!
+```
+
 ## Import (Other Formats to DBN)
 
 ```@docs
