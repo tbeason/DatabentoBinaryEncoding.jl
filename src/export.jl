@@ -111,8 +111,11 @@ function records_to_dataframe(records::Vector)
             return trades_to_dataframe(convert(Vector{TradeMsg}, records))
         elseif record_type <: MBOMsg
             return mbo_to_dataframe(convert(Vector{MBOMsg}, records))
-        elseif record_type <: MBP1Msg
-            return mbp1_to_dataframe(convert(Vector{MBP1Msg}, records))
+        elseif record_type <: TopOfBookMsg
+            # MBP-1 and the consolidated/BBO family (CMBP-1, TBBO, CBBO, BBO) all
+            # share the MBP-1 record layout: scalar fields plus a single
+            # top-of-book `levels::BidAskPair`. One converter handles them all.
+            return mbp1_to_dataframe(convert(Vector{record_type}, records))
         elseif record_type <: MBP10Msg
             return mbp10_to_dataframe(convert(Vector{MBP10Msg}, records))
         elseif record_type <: OHLCVMsg
@@ -170,18 +173,24 @@ function mbo_to_dataframe(records::Vector{MBOMsg})
     )
 end
 
-function mbp1_to_dataframe(records::Vector{MBP1Msg})
+# MBP-1 and the consolidated/BBO family share an identical record layout: the
+# scalar trade fields plus a single top-of-book `levels::BidAskPair`. They differ
+# only in which fields the gateway populates, so one DataFrame converter serves
+# all of them.
+const TopOfBookMsg = Union{MBP1Msg,CMBP1Msg,TCBBOMsg,CBBO1sMsg,CBBO1mMsg,BBO1sMsg,BBO1mMsg}
+
+function mbp1_to_dataframe(records::Vector{<:TopOfBookMsg})
     DataFrame(
         ts_event = [r.hd.ts_event for r in records],
         ts_recv = [r.ts_recv for r in records],
         instrument_id = [r.hd.instrument_id for r in records],
         publisher_id = [r.hd.publisher_id for r in records],
-        bid_price = [price_to_float(r.bid_px_00) for r in records],
-        ask_price = [price_to_float(r.ask_px_00) for r in records],
-        bid_size = [r.bid_sz_00 for r in records],
-        ask_size = [r.ask_sz_00 for r in records],
-        bid_ct = [r.bid_ct_00 for r in records],
-        ask_ct = [r.ask_ct_00 for r in records],
+        bid_price = [price_to_float(r.levels.bid_px) for r in records],
+        ask_price = [price_to_float(r.levels.ask_px) for r in records],
+        bid_size = [r.levels.bid_sz for r in records],
+        ask_size = [r.levels.ask_sz for r in records],
+        bid_ct = [r.levels.bid_ct for r in records],
+        ask_ct = [r.levels.ask_ct for r in records],
         flags = [r.flags for r in records],
         ts_in_delta = [r.ts_in_delta for r in records],
         sequence = [r.sequence for r in records],
@@ -191,45 +200,32 @@ function mbp1_to_dataframe(records::Vector{MBP1Msg})
 end
 
 function mbp10_to_dataframe(records::Vector{MBP10Msg})
-    # For MBP10, we need to expand the levels
+    # MBP-10 carries 10 price levels in `levels::NTuple{10,BidAskPair}`; expand
+    # each record into one row per level (0-indexed in the output).
     rows = []
     for record in records
-        # Add each level as a separate row
-        levels = [
-            (record.bid_px_00, record.ask_px_00, record.bid_sz_00, record.ask_sz_00, record.bid_ct_00, record.ask_ct_00),
-            (record.bid_px_01, record.ask_px_01, record.bid_sz_01, record.ask_sz_01, record.bid_ct_01, record.ask_ct_01),
-            (record.bid_px_02, record.ask_px_02, record.bid_sz_02, record.ask_sz_02, record.bid_ct_02, record.ask_ct_02),
-            (record.bid_px_03, record.ask_px_03, record.bid_sz_03, record.ask_sz_03, record.bid_ct_03, record.ask_ct_03),
-            (record.bid_px_04, record.ask_px_04, record.bid_sz_04, record.ask_sz_04, record.bid_ct_04, record.ask_ct_04),
-            (record.bid_px_05, record.ask_px_05, record.bid_sz_05, record.ask_sz_05, record.bid_ct_05, record.ask_ct_05),
-            (record.bid_px_06, record.ask_px_06, record.bid_sz_06, record.ask_sz_06, record.bid_ct_06, record.ask_ct_06),
-            (record.bid_px_07, record.ask_px_07, record.bid_sz_07, record.ask_sz_07, record.bid_ct_07, record.ask_ct_07),
-            (record.bid_px_08, record.ask_px_08, record.bid_sz_08, record.ask_sz_08, record.bid_ct_08, record.ask_ct_08),
-            (record.bid_px_09, record.ask_px_09, record.bid_sz_09, record.ask_sz_09, record.bid_ct_09, record.ask_ct_09)
-        ]
-        
-        for (level, (bid_px, ask_px, bid_sz, ask_sz, bid_ct, ask_ct)) in enumerate(levels)
+        for (level, pair) in enumerate(record.levels)
             push!(rows, (
                 ts_event = record.hd.ts_event,
                 ts_recv = record.ts_recv,
                 instrument_id = record.hd.instrument_id,
                 publisher_id = record.hd.publisher_id,
                 level = level - 1,  # 0-indexed
-                bid_price = price_to_float(bid_px),
-                ask_price = price_to_float(ask_px),
-                bid_size = bid_sz,
-                ask_size = ask_sz,
-                bid_ct = bid_ct,
-                ask_ct = ask_ct,
+                bid_price = price_to_float(pair.bid_px),
+                ask_price = price_to_float(pair.ask_px),
+                bid_size = pair.bid_sz,
+                ask_size = pair.ask_sz,
+                bid_ct = pair.bid_ct,
+                ask_ct = pair.ask_ct,
                 flags = record.flags,
                 ts_in_delta = record.ts_in_delta,
                 sequence = record.sequence,
-                action = string(Action.T(record.action)),
+                action = string(record.action),
                 side = string(record.side)
             ))
         end
     end
-    
+
     return DataFrame(rows)
 end
 
