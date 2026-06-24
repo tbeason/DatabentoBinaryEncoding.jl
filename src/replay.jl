@@ -129,16 +129,20 @@ const _SPIN_THRESHOLD = 2.0e-3
     _precise_sleep(s::Real)
 
 Sleep for `s` seconds with sub-millisecond accuracy. Coarse-sleeps everything
-beyond `_SPIN_THRESHOLD`, then busy-waits the remainder against `Base.time()`.
-Used when `replay_dbn`/`replay_records` are called with `precise = true`.
+beyond `_SPIN_THRESHOLD`, then busy-waits the remainder. Used when
+`replay_dbn`/`replay_records` are called with `precise = true`.
+
+The deadline is measured against `Base.time_ns()` — a monotonic counter — rather
+than wall-clock `time()`, so a system-clock adjustment (NTP, manual correction)
+mid-spin can't make the busy-wait return early or pin a core indefinitely.
 """
 function _precise_sleep(s::Real)
     s <= 0 && return nothing
-    deadline = time() + s
+    deadline = time_ns() + round(UInt64, s * 1.0e9)
     if s > _SPIN_THRESHOLD
         sleep(s - _SPIN_THRESHOLD)   # yield the bulk to the scheduler
     end
-    while time() < deadline          # spin the residual (≤ _SPIN_THRESHOLD)
+    while time_ns() < deadline       # spin the residual (≤ _SPIN_THRESHOLD)
     end
     return nothing
 end
