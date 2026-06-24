@@ -99,6 +99,7 @@ include("buffered_io.jl")
 include("decode.jl")
 include("encode.jl")
 include("streaming.jl")
+include("replay.jl")
 include("export.jl")
 include("symbols.jl")
 include("import.jl")
@@ -117,6 +118,7 @@ export foreach_record, foreach_record_with_control, foreach_trade, foreach_mbo, 
 export record_type_for_dbn_schema  # Schema -> concrete record type
 export foreach_ohlcv, foreach_ohlcv_1s, foreach_ohlcv_1m, foreach_ohlcv_1h, foreach_ohlcv_1d  # OHLCV streaming
 export foreach_cmbp1, foreach_cbbo1s, foreach_cbbo1m, foreach_tcbbo, foreach_bbo1s, foreach_bbo1m  # Consolidated/BBO streaming
+export replay_dbn, replay_records  # Timestamp-paced replay
 export compress_dbn_file, compress_daily_files
 export Schema, Compression, Encoding, SType, RType, Action, Side, InstrumentClass
 export price_to_float, float_to_price, ts_to_datetime, datetime_to_ts, ts_to_date_time, date_time_to_ts, to_nanoseconds
