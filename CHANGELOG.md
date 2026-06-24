@@ -5,7 +5,7 @@ All notable changes to DatabentoBinaryEncoding.jl are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.6] - 2026-06-24
 
 ### Changed
 
@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Timestamp-paced **replay**: `replay_dbn(f, filename; ...)` re-emits a DBN file's
+  records in time order, pacing each `f(record)` callback by the gap between record
+  timestamps to simulate a live feed (backtesting, demos, driving real-time
+  consumers). `replay_records(f, records; ...)` does the same over an already-loaded
+  collection. Zstd-aware and skips unknown record types like `DBNStream`. Pacing is
+  anchored to absolute wall-clock targets so callback execution time is absorbed
+  instead of accumulating as drift. Options: `speed` (time-compression multiplier;
+  `Inf` = no waiting), `timestamp` (`:ts_event` or `:ts_recv`, with fallback),
+  `max_sleep` (cap large gaps; re-anchors after a clamp), and `precise` (busy-wait
+  sub-millisecond gaps, since `Base.sleep` only resolves ~1 ms on Unix / ~15 ms on
+  Windows). `clock`/`sleep_fn` are injectable for deterministic testing.
 - `dbn_to_parquet` now compresses with **ZSTD by default** and accepts a `compression`
   keyword — one of `"zstd"` (default), `"snappy"`, `"gzip"`, or `"uncompressed"`.
 - Symbol resolution helpers that join the human-readable `raw_symbol` back onto
@@ -130,7 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conversion to JSON/Parquet/CSV; byte-for-byte compatibility with the official
   Rust implementation ([#18], [#19]).
 
-[Unreleased]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.3...HEAD
+[0.1.6]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.5...v0.1.6
 [0.1.3]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.0...v0.1.1

@@ -10,6 +10,7 @@ For more details, read the [introduction to DBN](https://databento.com/docs/stan
 
 - ✅ Complete DBN v3 Format Support
 - ✅ Efficient streaming support (read and write)
+- ✅ Timestamp-paced replay (simulate a live feed at any speed)
 - ✅ Zstd file compression support (read and write)
 - ✅ Bidirectional format conversion (DBN ↔ JSON/Parquet/CSV)
 - ✅ Byte-for-byte compatibility with official implementations
@@ -77,6 +78,51 @@ foreach_trade("trades.dbn") do trade
     total[] += price_to_float(trade.price)
 end
 println("Total: $(total[])")
+```
+
+### Replaying DBN Files
+
+Re-emit a file's records in time order, paced by their timestamps, to simulate a
+live feed (useful for backtesting, demos, or driving consumers that expect
+real-time data):
+
+```julia
+# Replay in real time — each record fires after the real gap to the previous one
+replay_dbn("trades.dbn") do rec
+    println(price_to_float(rec.price))
+end
+
+# Replay 100x faster, paced by receive time, with overnight gaps capped at 1s
+replay_dbn("mbo.dbn.zst"; speed = 100, timestamp = :ts_recv, max_sleep = 1.0) do rec
+    handle(rec)
+end
+
+# Replay an already-loaded collection (e.g. from read_dbn)
+records = read_dbn("trades.dbn")
+replay_records(records; speed = 5) do rec
+    handle(rec)
+end
+```
+
+Key options: `speed` (time-compression multiplier; `Inf` = no waiting),
+`timestamp` (`:ts_event` or `:ts_recv`), and `max_sleep` (cap on any single
+wait, in seconds). Compression and unknown record types are handled exactly as
+in `DBNStream`.
+
+**Timing resolution.** DBN timestamps are nanosecond precision, but pacing
+accuracy is bounded by the sleep function. `Base.sleep` resolves to roughly
+1 ms on Unix and as coarse as the system timer tick (~15 ms) on Windows, so
+records spaced more tightly than that arrive clumped rather than as distinct
+waits. Pacing is anchored to absolute wall-clock targets, so this clumping is
+local — the stream re-synchronizes and timing error does not accumulate across
+the file, and records sharing a timestamp are delivered back-to-back. For
+sub-millisecond fidelity (e.g. dense MBO bursts) pass `precise = true`, which
+busy-waits small gaps at the cost of pinning a CPU core:
+
+```julia
+replay_dbn("mbo.dbn"; precise = true) do rec
+    handle(rec)
+end
 ```
 
 ### Writing DBN Files

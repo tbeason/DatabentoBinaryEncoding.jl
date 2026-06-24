@@ -19,6 +19,7 @@ include("test_utils.jl")
     include("test_phase10_complete.jl")  # Integration and performance testing
     include("test_convenience_functions.jl")  # Test all convenience read_*/foreach_* functions
     include("test_phase11_typed_with_control.jl")  # foreach_record_with_control: typed data + Union control split
+    include("test_replay.jl")  # replay_dbn / replay_records: timestamp-paced re-emission
     include("test_issue23_unset_stype.jl")  # regression: 0xFF unset stype in v3 SymbolMappingMsg (issue #23)
     include("test_issues_32_35.jl")  # regressions: pre-v3 StatMsg layout, stat_to_dataframe, mapping intervals, invalid enum bytes (issues #32-#35)
     include("test_show.jl")  # compact one-line Base.show for record types
