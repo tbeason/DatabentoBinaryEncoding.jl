@@ -56,7 +56,7 @@ DatabentoBinaryEncoding.jl has the following dependencies (automatically install
 - **CodecZstd** - Zstd compression support
 - **CSV** - CSV file conversion
 - **JSON3** - JSON file conversion
-- **Parquet2** - Parquet file conversion
+- **DuckDB** - Parquet file conversion (read/write)
 - **DataFrames** - DataFrame conversion
 - **EnumX** - Enhanced enum support
 - **StructTypes** - Type serialization

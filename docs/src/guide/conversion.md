@@ -86,17 +86,18 @@ dbn_to_json("trades.dbn", "trades.jsonl")
 ```julia
 using DatabentoBinaryEncoding
 
-# Convert to Parquet
-dbn_to_parquet("trades.dbn", "output_directory/")
+# Convert to Parquet (ZSTD-compressed by default)
+dbn_to_parquet("trades.dbn", "trades.parquet")
 
-# Output creates trades.parquet in the directory
+# Choose a different compression codec
+dbn_to_parquet("trades.dbn", "trades.parquet", compression="snappy")
 ```
 
 **Parquet Output:**
 - Columnar format (efficient for analytics)
 - Preserves data types
-- Automatic compression
-- Compatible with Arrow, DuckDB, pandas, etc.
+- ZSTD compression by default (`compression` keyword: `"zstd"`, `"snappy"`, `"gzip"`, `"uncompressed"`)
+- Written via DuckDB, so it is reliably readable by Arrow, DuckDB, pandas/pyarrow, etc.
 
 ### DBN to DataFrame
 
@@ -274,7 +275,7 @@ rm("latest.dbn")
 using DatabentoBinaryEncoding
 
 # Convert historical data to Parquet
-dbn_to_parquet("2024_trades.dbn.zst", "data_lake/")
+dbn_to_parquet("2024_trades.dbn.zst", "data_lake/trades.parquet")
 
 # Now you can query with DuckDB, pandas, etc.
 # SELECT AVG(price) FROM 'data_lake/trades.parquet'

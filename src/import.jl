@@ -3,7 +3,6 @@ Import functionality for converting other formats to DBN.
 """
 
 using JSON3
-using Parquet2
 using DataFrames
 using CSV
 
@@ -284,9 +283,9 @@ parquet_to_dbn("data.parquet", "data.dbn", schema=Schema.TRADES, dataset="XNAS")
 """
 function parquet_to_dbn(input_file::String, output_file::String; 
                         schema=nothing, dataset="")
-    # Read Parquet file
-    df = Parquet2.readfile(input_file) |> DataFrame
-    
+    # Read Parquet file (via DuckDB)
+    df = _read_parquet(input_file)
+
     # Convert DataFrame to records
     records = dataframe_to_records(df, schema)
     

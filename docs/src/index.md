@@ -43,7 +43,7 @@ end
 
 # Convert to other formats
 dbn_to_csv("trades.dbn", "trades.csv")
-dbn_to_parquet("trades.dbn", "output_dir/")
+dbn_to_parquet("trades.dbn", "trades.parquet")
 ```
 
 ## Performance Characteristics

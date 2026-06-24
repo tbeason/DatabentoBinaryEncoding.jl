@@ -4,8 +4,50 @@ Export functionality for converting DBN data to other formats.
 
 using CSV
 using JSON3
-using Parquet2
+using DuckDB
+using DBInterface
 using DataFrames
+
+# --- Parquet I/O backend (DuckDB) ------------------------------------------
+# Parquet read/write is backed by DuckDB so the output is reliably readable by
+# every Parquet consumer (DuckDB, Arrow, pandas/pyarrow, ...). These private
+# helpers own the connection lifecycle and SQL path handling for both the
+# export (`dbn_to_parquet`) and import (`parquet_to_dbn`) directions.
+
+# Escape a path for a DuckDB SQL string literal: double single quotes, and on
+# Windows use forward slashes (accepted by DuckDB, avoids backslash ambiguity).
+_duckdb_sql_path(p::AbstractString) = replace(replace(p, '\\' => '/'), "'" => "''")
+
+function _write_parquet(df::DataFrame, output_file::AbstractString; compression="zstd")
+    comp = uppercase(String(compression))   # ZSTD | SNAPPY | GZIP | UNCOMPRESSED
+    # DuckDB cannot COPY a zero-column frame, which is what `records_to_dataframe`
+    # returns for an empty record set (e.g. a schema with no rows in the window).
+    # Fall back to a minimal header-only schema so we still write a valid, empty
+    # Parquet file that reads back as zero records.
+    if ncol(df) == 0
+        df = DataFrame(ts_event = Int64[], instrument_id = UInt32[], publisher_id = UInt16[])
+    end
+    con = DBInterface.connect(DuckDB.DB)
+    try
+        DuckDB.register_data_frame(con, df, "_dbn_export")
+        DBInterface.execute(con,
+            "COPY _dbn_export TO '$(_duckdb_sql_path(output_file))' " *
+            "(FORMAT PARQUET, COMPRESSION $comp)")
+    finally
+        DBInterface.close!(con)
+    end
+    return output_file
+end
+
+function _read_parquet(input_file::AbstractString)
+    con = DBInterface.connect(DuckDB.DB)
+    try
+        return DBInterface.execute(con,
+            "SELECT * FROM read_parquet('$(_duckdb_sql_path(input_file))')") |> DataFrame
+    finally
+        DBInterface.close!(con)
+    end
+end
 
 """
     dbn_to_csv(input_file, output_file)
@@ -69,23 +111,30 @@ function dbn_to_json(input_file::String, output_file::String; pretty=false)
 end
 
 """
-    dbn_to_parquet(input_file, output_file)
+    dbn_to_parquet(input_file, output_file; compression="zstd")
 
 Convert a DBN file to Parquet format.
+
+The Parquet file is written via DuckDB so the output is reliably readable by every
+Parquet consumer (DuckDB, Arrow, pandas/pyarrow, ...). A single Parquet file is written
+at `output_file`.
 
 # Arguments
 - `input_file::String`: Path to input DBN file
 - `output_file::String`: Path to output Parquet file
+- `compression`: Parquet compression codec — one of `"zstd"` (default), `"snappy"`,
+  `"gzip"`, or `"uncompressed"`.
 
 # Example
 ```julia
 dbn_to_parquet("data.dbn", "data.parquet")
+dbn_to_parquet("data.dbn", "data.parquet", compression="snappy")
 ```
 """
-function dbn_to_parquet(input_file::String, output_file::String)
+function dbn_to_parquet(input_file::String, output_file::String; compression="zstd")
     metadata, records = read_dbn_with_metadata(input_file)
     df = records_to_dataframe(records)
-    Parquet2.writefile(output_file, df)
+    _write_parquet(df, output_file; compression=compression)
     return df
 end
 
@@ -230,9 +279,9 @@ function mbp10_to_dataframe(records::Vector{MBP10Msg})
 end
 
 function ohlcv_to_dataframe(records::Vector{OHLCVMsg})
+    # OHLCVMsg has no ts_recv: it carries only hd, open/high/low/close, and volume.
     DataFrame(
         ts_event = [r.hd.ts_event for r in records],
-        ts_recv = [r.ts_recv for r in records],
         instrument_id = [r.hd.instrument_id for r in records],
         publisher_id = [r.hd.publisher_id for r in records],
         open = [price_to_float(r.open) for r in records],
@@ -244,27 +293,38 @@ function ohlcv_to_dataframe(records::Vector{OHLCVMsg})
 end
 
 function status_to_dataframe(records::Vector{StatusMsg})
+    # StatusMsg has no ts_in_delta/sequence; `action` is a status action code
+    # (UInt16), not a trading Action enum, so emit it raw alongside the flags.
     DataFrame(
         ts_event = [r.hd.ts_event for r in records],
         ts_recv = [r.ts_recv for r in records],
         instrument_id = [r.hd.instrument_id for r in records],
         publisher_id = [r.hd.publisher_id for r in records],
-        ts_in_delta = [r.ts_in_delta for r in records],
-        sequence = [r.sequence for r in records],
-        action = [string(Action.T(r.action)) for r in records]
+        action = [r.action for r in records],
+        reason = [r.reason for r in records],
+        trading_event = [r.trading_event for r in records],
+        is_trading = [r.is_trading for r in records],
+        is_quoting = [r.is_quoting for r in records],
+        is_short_sell_restricted = [r.is_short_sell_restricted for r in records]
     )
 end
 
 function imbalance_to_dataframe(records::Vector{ImbalanceMsg})
+    # ImbalanceMsg has no auction_price / ts_in_delta / sequence fields; it carries
+    # the auction price set below plus auction_time, and side codes are raw bytes.
     DataFrame(
         ts_event = [r.hd.ts_event for r in records],
         ts_recv = [r.ts_recv for r in records],
         instrument_id = [r.hd.instrument_id for r in records],
         publisher_id = [r.hd.publisher_id for r in records],
         ref_price = [price_to_float(r.ref_price) for r in records],
-        auction_price = [price_to_float(r.auction_price) for r in records],
+        auction_time = [r.auction_time for r in records],
         cont_book_clr_price = [price_to_float(r.cont_book_clr_price) for r in records],
         auct_interest_clr_price = [price_to_float(r.auct_interest_clr_price) for r in records],
+        ssr_filling_price = [price_to_float(r.ssr_filling_price) for r in records],
+        ind_match_price = [price_to_float(r.ind_match_price) for r in records],
+        upper_collar = [price_to_float(r.upper_collar) for r in records],
+        lower_collar = [price_to_float(r.lower_collar) for r in records],
         paired_qty = [r.paired_qty for r in records],
         total_imbalance_qty = [r.total_imbalance_qty for r in records],
         market_imbalance_qty = [r.market_imbalance_qty for r in records],
@@ -274,10 +334,8 @@ function imbalance_to_dataframe(records::Vector{ImbalanceMsg})
         auction_status = [r.auction_status for r in records],
         freeze_status = [r.freeze_status for r in records],
         num_extensions = [r.num_extensions for r in records],
-        unpaired_side = [string(r.unpaired_side) for r in records],
-        significant_imbalance = [r.significant_imbalance for r in records],
-        ts_in_delta = [r.ts_in_delta for r in records],
-        sequence = [r.sequence for r in records]
+        unpaired_side = [r.unpaired_side for r in records],
+        significant_imbalance = [r.significant_imbalance for r in records]
     )
 end
 
@@ -314,7 +372,6 @@ function instrument_def_to_dataframe(records::Vector{InstrumentDefMsg})
         currency = [strip_nulls(String(r.currency)) for r in records],
         instrument_class = [string(r.instrument_class) for r in records],
         strike_price = [price_to_float(r.strike_price) for r in records],
-        multiplier = [r.multiplier for r in records],
         expiration = [r.expiration for r in records],
         activation = [r.activation for r in records],
         high_limit_price = [price_to_float(r.high_limit_price) for r in records],
@@ -339,11 +396,9 @@ function instrument_def_to_dataframe(records::Vector{InstrumentDefMsg})
         contract_multiplier = [r.contract_multiplier for r in records],
         contract_multiplier_unit = [r.contract_multiplier_unit for r in records],
         flow_schedule_type = [r.flow_schedule_type for r in records],
-        min_price_increment_portfolio_type = [r.min_price_increment_portfolio_type for r in records],
+        tick_rule = [r.tick_rule for r in records],
         user_defined_instrument = [r.user_defined_instrument for r in records],
-        trading_reference_date = [r.trading_reference_date for r in records],
-        ts_in_delta = [r.ts_in_delta for r in records],
-        sequence = [r.sequence for r in records]
+        trading_reference_date = [r.trading_reference_date for r in records]
     )
 end
 

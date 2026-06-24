@@ -352,8 +352,10 @@ end
 **Solution**: Ensure Parquet has correct schema:
 ```julia
 # Check column names
-using Parquet2
-df = Parquet2.Dataset("file.parquet") |> DataFrame
+using DuckDB, DBInterface, DataFrames
+con = DBInterface.connect(DuckDB.DB)
+df = DBInterface.execute(con, "SELECT * FROM read_parquet('file.parquet')") |> DataFrame
+DBInterface.close!(con)
 names(df)  # Should match DBN field names
 
 # Ensure correct types (especially timestamps, prices)
