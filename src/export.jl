@@ -134,6 +134,11 @@ dbn_to_parquet("data.dbn", "data.parquet", compression="snappy")
 function dbn_to_parquet(input_file::String, output_file::String; compression="zstd")
     metadata, records = read_dbn_with_metadata(input_file)
     df = records_to_dataframe(records)
+    # An empty record set yields a column-less DataFrame; rebuild it from the file's
+    # schema so the Parquet keeps the real columns and round-trips to zero records.
+    if ncol(df) == 0
+        df = empty_dataframe_for_schema(metadata.schema)
+    end
     _write_parquet(df, output_file; compression=compression)
     return df
 end
@@ -184,6 +189,55 @@ function records_to_dataframe(records::Vector)
     else
         # For mixed record types, create a generic structure
         return mixed_records_to_dataframe(records)
+    end
+end
+
+"""
+    empty_dataframe_for_schema(schema)
+
+Build a zero-row DataFrame with the columns of `schema`'s record type.
+
+`records_to_dataframe` returns a column-less `DataFrame()` for an empty record set
+because it has no record to dispatch on. When the originating `Metadata.schema` is known
+(e.g. in `dbn_to_parquet`), use it here instead so the exported file keeps the real schema
+and round-trips back to zero records. Unknown/mixed schemas fall back to a minimal
+header-only frame.
+"""
+function empty_dataframe_for_schema(schema)
+    if schema == Schema.TRADES
+        return trades_to_dataframe(TradeMsg[])
+    elseif schema == Schema.MBO
+        return mbo_to_dataframe(MBOMsg[])
+    elseif schema == Schema.MBP_1 || schema == Schema.TBBO
+        return mbp1_to_dataframe(MBP1Msg[])
+    elseif schema == Schema.CMBP_1
+        return mbp1_to_dataframe(CMBP1Msg[])
+    elseif schema == Schema.CBBO_1S
+        return mbp1_to_dataframe(CBBO1sMsg[])
+    elseif schema == Schema.CBBO_1M
+        return mbp1_to_dataframe(CBBO1mMsg[])
+    elseif schema == Schema.TCBBO
+        return mbp1_to_dataframe(TCBBOMsg[])
+    elseif schema == Schema.BBO_1S
+        return mbp1_to_dataframe(BBO1sMsg[])
+    elseif schema == Schema.BBO_1M
+        return mbp1_to_dataframe(BBO1mMsg[])
+    elseif schema == Schema.MBP_10
+        return mbp10_to_dataframe(MBP10Msg[])
+    elseif schema == Schema.OHLCV_1S || schema == Schema.OHLCV_1M ||
+           schema == Schema.OHLCV_1H || schema == Schema.OHLCV_1D
+        return ohlcv_to_dataframe(OHLCVMsg[])
+    elseif schema == Schema.STATUS
+        return status_to_dataframe(StatusMsg[])
+    elseif schema == Schema.IMBALANCE
+        return imbalance_to_dataframe(ImbalanceMsg[])
+    elseif schema == Schema.STATISTICS
+        return stat_to_dataframe(StatMsg[])
+    elseif schema == Schema.DEFINITION
+        return instrument_def_to_dataframe(InstrumentDefMsg[])
+    else
+        # Unknown / mixed schema: minimal header-only frame.
+        return DataFrame(ts_event = Int64[], instrument_id = UInt32[], publisher_id = UInt16[])
     end
 end
 
@@ -251,6 +305,17 @@ end
 function mbp10_to_dataframe(records::Vector{MBP10Msg})
     # MBP-10 carries 10 price levels in `levels::NTuple{10,BidAskPair}`; expand
     # each record into one row per level (0-indexed in the output).
+    # The row-by-row builder below would collapse to a 0-column frame on empty
+    # input, so return an explicitly-typed zero-row frame in that case.
+    if isempty(records)
+        return DataFrame(
+            ts_event = Int64[], ts_recv = Int64[], instrument_id = UInt32[],
+            publisher_id = UInt16[], level = Int64[], bid_price = Float64[],
+            ask_price = Float64[], bid_size = UInt32[], ask_size = UInt32[],
+            bid_ct = UInt32[], ask_ct = UInt32[], flags = UInt8[],
+            ts_in_delta = Int32[], sequence = UInt32[], action = String[], side = String[]
+        )
+    end
     rows = []
     for record in records
         for (level, pair) in enumerate(record.levels)

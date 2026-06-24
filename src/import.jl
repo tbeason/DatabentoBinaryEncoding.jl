@@ -688,9 +688,10 @@ function create_metadata_from_dataframe(df::DataFrame, schema, dataset)
         error("No timestamp column found in DataFrame")
     end
     
-    start_ts = minimum(df[!, ts_col])
-    end_ts = maximum(df[!, ts_col])
-    
+    # Guard the empty case: minimum/maximum throw on a zero-row column.
+    start_ts = isempty(df[!, ts_col]) ? Int64(0) : minimum(df[!, ts_col])
+    end_ts = isempty(df[!, ts_col]) ? Int64(0) : maximum(df[!, ts_col])
+
     return Metadata(
         UInt8(3),                    # DBN version
         dataset,                     # dataset

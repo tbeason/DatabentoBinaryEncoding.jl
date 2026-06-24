@@ -44,9 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `auction_time`, `ssr_filling_price`, `ind_match_price`, `upper_collar`, `lower_collar`;
   DEFINITION emits `tick_rule`).
 - `dbn_to_parquet` no longer errors on an **empty record set** (e.g. an OHLCV-1d window
-  with no bars). A zero-column DataFrame is written as a valid, empty header-only Parquet
-  file (`ts_event`, `instrument_id`, `publisher_id`) that reads back as zero records,
-  instead of raising a DuckDB "Table function must return at least one column" error.
+  with no bars). The exported Parquet preserves the file's real schema (built from
+  `Metadata.schema` via `empty_dataframe_for_schema`) as a valid, zero-row file that reads
+  back as zero records, instead of raising a DuckDB "Table function must return at least
+  one column" error. `mbp10_to_dataframe` likewise returns a typed zero-row frame on empty
+  input rather than a column-less one.
+- `create_metadata_from_dataframe` (used by `parquet_to_dbn` / `csv_to_dbn`) no longer
+  throws from `minimum`/`maximum` on a zero-row DataFrame; an empty frame yields
+  `start_ts = end_ts = 0`, so a fully-empty Parquet/CSV round-trips back to DBN.
 - `records_to_dataframe` (and therefore `to_dataframe` / `dbn_to_parquet`) no
   longer throws `FieldError` on **TBBO / MBP-1** and **MBP-10**. The converters
   read non-existent flat `bid_px_00…` fields; the bid/ask data actually lives in
