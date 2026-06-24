@@ -85,7 +85,8 @@ using TranscodingStreams
 using EnumX
 using DataFrames
 using CSV
-using Parquet2
+using DuckDB
+using DBInterface
 using JSON3
 using StructTypes
 

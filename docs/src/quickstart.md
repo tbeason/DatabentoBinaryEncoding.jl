@@ -153,8 +153,8 @@ dbn_to_csv("trades.dbn", "trades.csv")
 # DBN → JSON
 dbn_to_json("trades.dbn", "trades.json")
 
-# DBN → Parquet
-dbn_to_parquet("trades.dbn", "output_dir/")
+# DBN → Parquet (ZSTD-compressed by default)
+dbn_to_parquet("trades.dbn", "trades.parquet")
 
 # DBN → DataFrame
 df = records_to_dataframe(records)

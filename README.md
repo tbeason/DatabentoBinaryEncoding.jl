@@ -149,7 +149,7 @@ close_writer!(writer)
 # Convert to different formats
 dbn_to_csv("trades.dbn", "trades.csv")
 dbn_to_json("trades.dbn", "trades.json")
-dbn_to_parquet("trades.dbn", "output_dir/")
+dbn_to_parquet("trades.dbn", "trades.parquet")  # ZSTD-compressed by default
 
 # Convert to DataFrame for analysis
 df = records_to_dataframe(records)

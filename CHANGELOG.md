@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Parquet read/write is now backed by **DuckDB.jl** instead of **Parquet2.jl**. The
+  previous Parquet2-written files were not reliably readable by all Parquet consumers
+  (e.g. DuckDB, pandas/pyarrow); DuckDB-written output is broadly compatible. `Parquet2`
+  has been dropped as a dependency (replaced by `DuckDB` and `DBInterface`). Both
+  `dbn_to_parquet` and `parquet_to_dbn` are affected. `dbn_to_parquet` writes a single
+  Parquet file at the exact `output_file` path (pass a `*.parquet` path, not a directory).
+
 ### Added
 
+- `dbn_to_parquet` now compresses with **ZSTD by default** and accepts a `compression`
+  keyword — one of `"zstd"` (default), `"snappy"`, `"gzip"`, or `"uncompressed"`.
 - Symbol resolution helpers that join the human-readable `raw_symbol` back onto
   records using `Metadata.mappings`: `symbol_map(metadata)` builds an
   `instrument_id -> [(start_date, end_date, raw_symbol)]` lookup,
@@ -22,6 +33,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `records_to_dataframe` (and therefore `dbn_to_csv` / `dbn_to_parquet`) no longer throws
+  `FieldError` on **OHLCV**, **STATUS**, **IMBALANCE**, and **DEFINITION** records. The
+  converters referenced struct fields that do not exist: `OHLCVMsg.ts_recv`;
+  `StatusMsg.ts_in_delta`/`sequence` (and a bogus `Action.T` cast of the status action
+  code); `ImbalanceMsg.auction_price`/`ts_in_delta`/`sequence`; and
+  `InstrumentDefMsg.multiplier`/`min_price_increment_portfolio_type`/`ts_in_delta`/
+  `sequence`. They now read the real fields (e.g. STATUS emits `reason`,
+  `trading_event`, `is_trading`/`is_quoting`/`is_short_sell_restricted`; IMBALANCE emits
+  `auction_time`, `ssr_filling_price`, `ind_match_price`, `upper_collar`, `lower_collar`;
+  DEFINITION emits `tick_rule`).
+- `dbn_to_parquet` no longer errors on an **empty record set** (e.g. an OHLCV-1d window
+  with no bars). The exported Parquet preserves the file's real schema (built from
+  `Metadata.schema` via `empty_dataframe_for_schema`) as a valid, zero-row file that reads
+  back as zero records, instead of raising a DuckDB "Table function must return at least
+  one column" error. `mbp10_to_dataframe` likewise returns a typed zero-row frame on empty
+  input rather than a column-less one.
+- `create_metadata_from_dataframe` (used by `parquet_to_dbn` / `csv_to_dbn`) no longer
+  throws from `minimum`/`maximum` on a zero-row DataFrame; an empty frame yields
+  `start_ts = end_ts = 0`, so a fully-empty Parquet/CSV round-trips back to DBN.
 - `records_to_dataframe` (and therefore `to_dataframe` / `dbn_to_parquet`) no
   longer throws `FieldError` on **TBBO / MBP-1** and **MBP-10**. The converters
   read non-existent flat `bid_px_00…` fields; the bid/ask data actually lives in

@@ -41,8 +41,8 @@ dbn_to_csv("trades.dbn", "trades.csv")
 # Convert to JSON
 dbn_to_json("trades.dbn", "trades.json")
 
-# Convert to Parquet
-dbn_to_parquet("trades.dbn", "output_dir/")
+# Convert to Parquet (ZSTD-compressed by default)
+dbn_to_parquet("trades.dbn", "trades.parquet")
 
 # Convert to DataFrame for analysis
 records = read_trades("trades.dbn")
