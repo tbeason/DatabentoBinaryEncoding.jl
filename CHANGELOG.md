@@ -5,6 +5,39 @@ All notable changes to DatabentoBinaryEncoding.jl are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`MBOMsg` wire layout.** `read_mbo_msg` and `write_record(::MBOMsg)` used a
+  field order that does not match the DBN spec: `ts_recv` was read from bytes
+  16-23, `order_id` from 24-31 and `price` from 40-47, whereas the official
+  `MboMsg` (identical in DBN v1/v2/v3) has `order_id` at 16, `price` at 24 and
+  `ts_recv` at 40. Because the encoder mirrored the decoder, files written by
+  this package round-tripped and every self-consistency test passed, but every
+  MBO file produced by Databento (historical downloads, live captures, the
+  official `test_data.mbo.*` fixtures) decoded with the three fields rotated:
+  `price` held the `ts_recv` nanoseconds, `ts_recv` held the `order_id`, and
+  `order_id` held the fixed-point price. Both paths now use the official layout.
+  New `test/test_mbo_wire_layout.jl` decodes Databento's fixtures against
+  reference values from the official decoder and checks a byte-exact re-encode.
+  **Migration:** MBO `.dbn` files that earlier versions *wrote from Julia-built
+  records* (`write_dbn`, `DBNStreamWriter`, `csv_to_dbn` / `json_to_dbn` /
+  `parquet_to_dbn`) carry the swapped layout on disk and will now decode
+  rotated; re-export them from the source data. Files captured by decoding and
+  re-encoding gateway bytes (e.g. DatabentoAPI.jl `stream_to_file`) are
+  byte-identical to the wire and decode correctly with this fix.
+- **`StatMsg` undefined-quantity sentinel on write.** The encoder wrote an
+  undefined v3 `quantity` (`typemax(Int64)`) as `0xffffffffffffffff`, i.e. `-1`,
+  instead of the spec sentinel `typemax(Int64)` (`0x7fff…`). Other readers
+  (databento, duckdb-dbn) therefore showed `-1` where they should show
+  NULL/NaN, and a Julia round trip of an undefined quantity came back as `-1`.
+  The quantity is now written verbatim as a signed `Int64`, and the v3 decoder
+  reads it as a signed `Int64` (it used to read a `UInt64` and treat every
+  value >= `0x7fff…`, i.e. any negative quantity, as undefined, which masked
+  the bug). Files written by
+  earlier versions with undefined statistics quantities contain `-1` on disk.
+
 ## [0.1.6] - 2026-06-24
 
 ### Changed

@@ -650,7 +650,9 @@ using Dates
                 
                 # First record
                 r1 = records[1]
-                @test r1.order_id == 3722750000000
+                @test r1.order_id == 647784973705   # official value; pre-0.1.7 this held the price bytes
+                @test r1.price == 3722750000000
+                @test r1.ts_recv == 1609160400000704060
                 @test r1.action == Action.CANCEL
                 @test r1.side == Side.ASK
                 @test r1.size == 1
@@ -659,7 +661,8 @@ using Dates
                 
                 # Second record
                 r2 = records[2]
-                @test r2.order_id == 3723000000000
+                @test r2.order_id == 647784973631
+                @test r2.price == 3723000000000
                 @test r2.action == Action.CANCEL
                 @test r2.side == Side.ASK
                 @test r2.sequence == r1.sequence + 1
@@ -675,7 +678,9 @@ using Dates
                 
                 # Should match uncompressed data
                 r1 = records[1]
-                @test r1.order_id == 3722750000000
+                @test r1.order_id == 647784973705   # official value; pre-0.1.7 this held the price bytes
+                @test r1.price == 3722750000000
+                @test r1.ts_recv == 1609160400000704060
                 @test r1.action == Action.CANCEL
                 @test r1.side == Side.ASK
             end

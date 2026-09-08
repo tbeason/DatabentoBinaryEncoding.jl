@@ -502,15 +502,19 @@ end
     # We've already read: length(1) + rtype(1) + publisher_id(2) + instrument_id(4) + ts_event(8) = 16 bytes
     # Remaining to read: 56 - 16 = 40 bytes
     
-    # Based on Rust struct order and empirical evidence:
-    ts_recv = read(decoder.io, Int64)      # 8 bytes (positions 16-23)
-    order_id = read(decoder.io, UInt64)    # 8 bytes (positions 24-31)
+    # Official DBN MboMsg layout (dbn crate `MboMsg`; identical in v1/v2/v3):
+    #   order_id u64 @16, price i64 @24, size u32 @32, flags u8 @36, channel_id u8 @37,
+    #   action c_char @38, side c_char @39, ts_recv u64 @40, ts_in_delta i32 @48, sequence u32 @52.
+    # Struct field order == wire order, so no reordering is needed. (Through 0.1.6 this
+    # reader swapped order_id/ts_recv and price/ts_recv; see CHANGELOG.)
+    order_id = read(decoder.io, UInt64)    # 8 bytes (positions 16-23)
+    price = read(decoder.io, Int64)        # 8 bytes (positions 24-31)
     size = read(decoder.io, UInt32)        # 4 bytes (positions 32-35)
     flags = read(decoder.io, UInt8)        # 1 byte (position 36)
     channel_id = read(decoder.io, UInt8)   # 1 byte (position 37)
     action = safe_action(read(decoder.io, UInt8))   # 1 byte (position 38)
     side = safe_side(read(decoder.io, UInt8))       # 1 byte (position 39)
-    price = read(decoder.io, Int64)        # 8 bytes (positions 40-47)
+    ts_recv = read(decoder.io, Int64)      # 8 bytes (positions 40-47)
     ts_in_delta = read(decoder.io, Int32)  # 4 bytes (positions 48-51)
     sequence = read(decoder.io, UInt32)    # 4 bytes (positions 52-55)
     
@@ -642,9 +646,11 @@ end
         quantity_raw = read(decoder.io, Int32)
         quantity_raw == typemax(Int32) ? typemax(Int64) : Int64(quantity_raw)
     else
-        # v3: 64-bit quantity, UNDEF_STAT_QUANTITY = typemax(Int64)
-        quantity_raw = read(decoder.io, UInt64)
-        quantity_raw >= 0x7fffffffffffffff ? typemax(Int64) : Int64(quantity_raw)
+        # v3: signed 64-bit quantity; UNDEF_STAT_QUANTITY = typemax(Int64) (0x7fff...), which
+        # needs no mapping. (Through 0.1.6 this read a UInt64 and treated every value
+        # >= 0x7fff... - i.e. any negative quantity - as UNDEF, masking that the encoder
+        # wrote -1 for UNDEF.)
+        read(decoder.io, Int64)
     end
     sequence = read(decoder.io, UInt32)
     ts_in_delta = read(decoder.io, Int32)
