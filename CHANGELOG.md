@@ -5,6 +5,36 @@ All notable changes to DatabentoBinaryEncoding.jl are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`StatType` enum** (`UInt16`, matches the DBN spec) for interpreting
+  `StatMsg.stat_type`, including `UPPER_PRICE_LIMIT = 17` and
+  `LOWER_PRICE_LIMIT = 18`, which CME GLBX.MDP3 publishes since Databento's
+  2026-07 normalization change, plus the block-volume, indicative-close,
+  market-wide-circuit-breaker, auction-collar and venue-specific codes.
+  `safe_stat_type(raw)` maps unrecognized codes to `StatType.UNKNOWN`. The
+  struct field stays a raw `UInt16` (no breaking change).
+- **`TradingEvent` enum** (`UInt16`) for `StatusMsg.trading_event`:
+  `NONE`, `NO_CANCEL`, `CHANGE_TRADING_SESSION`, `IMPLIED_MATCHING_ON = 3`,
+  `IMPLIED_MATCHING_OFF = 4` (the latter two are emitted by CME since 2026-07).
+  `safe_trading_event(raw)` maps unrecognized codes to `TradingEvent.NONE`.
+- **`InstrumentClass.INDEX`** (`'I'`), present in the DBN spec but previously
+  missing here; such definitions decoded as `InstrumentClass.OTHER` with a
+  warning. (`FX_SPOT = 'X'`, which CME now uses for FX spot instruments instead
+  of `FUTURE`, was already supported.)
+- **Record flag constants** `F_LAST` (128), `F_TOB`, `F_SNAPSHOT`, `F_MBP`,
+  `F_BAD_TS_RECV`, `F_MAYBE_BAD_BOOK`, `F_PUBLISHER_SPECIFIC` and a `has_flag`
+  helper. Relevant to the 2026-07 CME change where `F_LAST` moved from the
+  final MBO book update onto a standalone `action = Action.NONE` record with
+  `price = UNDEF_PRICE`, `size = 0`; that record already decoded, exported
+  (`NaN` price) and printed correctly, and is now covered by tests.
+- Test coverage (`test/test_cme_2026_07.jl`) for the 2026-07 CME normalization
+  shapes: one definition record per strategy leg, the standalone `F_LAST` MBO
+  record, price-limit statistics, implied-matching status events and FX-spot /
+  index definitions.
+
 ## [0.1.6] - 2026-06-24
 
 ### Changed
