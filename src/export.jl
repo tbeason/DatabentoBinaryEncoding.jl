@@ -18,8 +18,20 @@ using DataFrames
 # Windows use forward slashes (accepted by DuckDB, avoids backslash ambiguity).
 _duckdb_sql_path(p::AbstractString) = replace(replace(p, '\\' => '/'), "'" => "''")
 
+const _PARQUET_COMPRESSION_CODECS = ("ZSTD", "SNAPPY", "GZIP", "UNCOMPRESSED")
+
+function _parquet_compression(compression)
+    comp = uppercase(String(compression))
+    comp in _PARQUET_COMPRESSION_CODECS || throw(ArgumentError(
+        "unsupported Parquet compression $(repr(compression)); expected one of " *
+        join(lowercase.(_PARQUET_COMPRESSION_CODECS), ", ")))
+    return comp
+end
+
 function _write_parquet(df::DataFrame, output_file::AbstractString; compression="zstd")
-    comp = uppercase(String(compression))   # ZSTD | SNAPPY | GZIP | UNCOMPRESSED
+    # Validate before interpolating the codec into DuckDB SQL. Unlike the path,
+    # this token cannot be parameter-bound or quoted in COPY options.
+    comp = _parquet_compression(compression)
     # DuckDB cannot COPY a zero-column frame, which is what `records_to_dataframe`
     # returns for an empty record set (e.g. a schema with no rows in the window).
     # Fall back to a minimal header-only schema so we still write a valid, empty
