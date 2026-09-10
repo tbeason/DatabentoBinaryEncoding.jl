@@ -250,6 +250,17 @@ using DataFrames   # for nrow / ncol on dbn_to_csv / dbn_to_parquet / records_to
                     safe_rm(temp_parquet)
                 end
             end
+
+            @testset "Parquet compression validation" begin
+                temp_parquet = tempname() * ".parquet"
+                try
+                    @test_throws ArgumentError dbn_to_parquet(
+                        test_file, temp_parquet; compression = "zstd); DROP TABLE x; --")
+                    @test !isfile(temp_parquet)
+                finally
+                    safe_rm(temp_parquet)
+                end
+            end
             
             @testset "DataFrame Conversion" begin
                 metadata, records = read_dbn_with_metadata(test_file)

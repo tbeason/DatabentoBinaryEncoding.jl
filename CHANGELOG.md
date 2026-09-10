@@ -5,9 +5,17 @@ All notable changes to DatabentoBinaryEncoding.jl are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.7] - 2026-09-10
+
+### Changed
+
+- Replay pacing now uses a monotonic clock by default, so NTP or manual
+  wall-clock adjustments cannot change replay timing.
 
 ### Fixed
+
+- Parquet compression names are validated before being interpolated into the
+  DuckDB `COPY` statement; unsupported codecs now throw `ArgumentError`.
 
 - **`MBOMsg` wire layout.** `read_mbo_msg` and `write_record(::MBOMsg)` used a
   field order that does not match the DBN spec: `ts_recv` was read from bytes
