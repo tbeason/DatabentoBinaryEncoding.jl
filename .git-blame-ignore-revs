@@ -1,0 +1,6 @@
+# Revisions listed here are skipped by `git blame`.
+# GitHub honors this file automatically. Locally, enable it with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Normalize line endings to LF via .gitattributes (no content changes)
+659fb36bec08d6bde072efe982ddc63303ba6103
