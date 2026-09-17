@@ -125,11 +125,63 @@ codes:
 - `CALL` (`'C'`) - Call option
 - `PUT` (`'P'`) - Put option
 - `FUTURE` (`'F'`) - Futures contract
+- `INDEX` (`'I'`) - Index
 - `BOND` (`'B'`) - Fixed income
 - `FX_SPOT` (`'X'`) - Foreign exchange spot
 - `COMMODITY_SPOT` (`'Y'`) - Commodity spot
 - `MIXED_SPREAD` (`'M'`), `FUTURE_SPREAD` (`'S'`), `OPTION_SPREAD` (`'T'`) - Spreads
 - `OTHER` (`'?'`), `UNKNOWN_0`, `UNKNOWN_45` - Fallbacks for unclassified instruments
+
+## Statistic Types
+
+```@docs
+StatType
+safe_stat_type
+```
+
+`StatMsg.stat_type` is stored as a raw `UInt16`; use `StatType` to interpret it,
+e.g. `r.stat_type == UInt16(StatType.SETTLEMENT_PRICE)` or
+`safe_stat_type(r.stat_type)`. Notable values: `OPENING_PRICE` (1),
+`SETTLEMENT_PRICE` (3), `OPEN_INTEREST` (9), `CLOSE_PRICE` (11),
+`UPPER_PRICE_LIMIT` (17) and `LOWER_PRICE_LIMIT` (18) — the last two are the
+session price limits CME GLBX.MDP3 publishes since 2026-07.
+
+## Trading Events
+
+```@docs
+TradingEvent
+safe_trading_event
+```
+
+`StatusMsg.trading_event` is stored as a raw `UInt16`; `TradingEvent` names the
+codes: `NONE` (0), `NO_CANCEL` (1), `CHANGE_TRADING_SESSION` (2),
+`IMPLIED_MATCHING_ON` (3), `IMPLIED_MATCHING_OFF` (4).
+
+## Record Flags
+
+```@docs
+F_LAST
+F_TOB
+F_SNAPSHOT
+F_MBP
+F_BAD_TS_RECV
+F_MAYBE_BAD_BOOK
+F_PUBLISHER_SPECIFIC
+has_flag
+```
+
+The `flags` byte on MBO/MBP/trade/BBO records is a bit field. `F_LAST` (128)
+marks the last record of a venue event. Since 2026-07, CME MBO carries it on a
+standalone `action = Action.NONE` record with `price = UNDEF_PRICE` and
+`size = 0`, so book builders should apply updates on every record and treat the
+`F_LAST` record purely as an event boundary:
+
+```julia
+foreach_mbo("glbx.mbo.dbn.zst") do r
+    r.action == Action.NONE || apply_to_book!(book, r)
+    has_flag(r.flags, F_LAST) && on_event_complete!(book)
+end
+```
 
 ## Usage Examples
 

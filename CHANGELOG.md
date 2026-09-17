@@ -5,12 +5,56 @@ All notable changes to DatabentoBinaryEncoding.jl are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-09-17
+
+### Added
+
+- **`StatType` enum** (`UInt16`, matches the DBN spec) for interpreting
+  `StatMsg.stat_type`, including `UPPER_PRICE_LIMIT = 17` and
+  `LOWER_PRICE_LIMIT = 18`, which CME GLBX.MDP3 publishes since Databento's
+  2026-07 normalization change, plus the block-volume, indicative-close,
+  market-wide-circuit-breaker, auction-collar and venue-specific codes.
+  `safe_stat_type(raw)` maps unrecognized codes to `StatType.UNKNOWN`. The
+  struct field stays a raw `UInt16` (no breaking change).
+- **`TradingEvent` enum** (`UInt16`) for `StatusMsg.trading_event`:
+  `NONE`, `NO_CANCEL`, `CHANGE_TRADING_SESSION`, `IMPLIED_MATCHING_ON = 3`,
+  `IMPLIED_MATCHING_OFF = 4` (the latter two are emitted by CME since 2026-07).
+  `safe_trading_event(raw)` maps unrecognized codes to `TradingEvent.NONE`.
+- **`InstrumentClass.INDEX`** (`'I'`), present in the DBN spec but previously
+  missing here; such definitions decoded as `InstrumentClass.OTHER` with a
+  warning. (`FX_SPOT = 'X'`, which CME now uses for FX spot instruments instead
+  of `FUTURE`, was already supported.)
+- **Record flag constants** `F_LAST` (128), `F_TOB`, `F_SNAPSHOT`, `F_MBP`,
+  `F_BAD_TS_RECV`, `F_MAYBE_BAD_BOOK`, `F_PUBLISHER_SPECIFIC` and a `has_flag`
+  helper. Relevant to the 2026-07 CME change where `F_LAST` moved from the
+  final MBO book update onto a standalone `action = Action.NONE` record with
+  `price = UNDEF_PRICE`, `size = 0`; that record already decoded, exported
+  (`NaN` price) and printed correctly, and is now covered by tests.
+- Test coverage (`test/test_cme_2026_07.jl`) for the 2026-07 CME normalization
+  shapes: one definition record per strategy leg, the standalone `F_LAST` MBO
+  record, price-limit statistics, implied-matching status events and FX-spot /
+  index definitions.
+
 ## [0.1.6] - 2026-09-10
 
 ### Changed
 
 - Replay pacing now uses a monotonic clock by default, so NTP or manual
   wall-clock adjustments cannot change replay timing.
+
+### Added
+
+- Timestamp-paced **replay**: `replay_dbn(f, filename; ...)` re-emits a DBN file's
+  records in time order, pacing each `f(record)` callback by the gap between record
+  timestamps to simulate a live feed (backtesting, demos, driving real-time
+  consumers). `replay_records(f, records; ...)` does the same over an already-loaded
+  collection. Zstd-aware and skips unknown record types like `DBNStream`. Pacing is
+  anchored to absolute wall-clock targets so callback execution time is absorbed
+  instead of accumulating as drift. Options: `speed` (time-compression multiplier;
+  `Inf` = no waiting), `timestamp` (`:ts_event` or `:ts_recv`, with fallback),
+  `max_sleep` (cap large gaps; re-anchors after a clamp), and `precise` (busy-wait
+  sub-millisecond gaps, since `Base.sleep` only resolves ~1 ms on Unix / ~15 ms on
+  Windows). `clock`/`sleep_fn` are injectable for deterministic testing.
 
 ### Fixed
 
@@ -46,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the bug). Files written by
   earlier versions with undefined statistics quantities contain `-1` on disk.
 
-## [0.1.6] - 2026-06-24
+## [0.1.5] - 2026-06-24
 
 ### Changed
 
@@ -59,29 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Timestamp-paced **replay**: `replay_dbn(f, filename; ...)` re-emits a DBN file's
-  records in time order, pacing each `f(record)` callback by the gap between record
-  timestamps to simulate a live feed (backtesting, demos, driving real-time
-  consumers). `replay_records(f, records; ...)` does the same over an already-loaded
-  collection. Zstd-aware and skips unknown record types like `DBNStream`. Pacing is
-  anchored to absolute wall-clock targets so callback execution time is absorbed
-  instead of accumulating as drift. Options: `speed` (time-compression multiplier;
-  `Inf` = no waiting), `timestamp` (`:ts_event` or `:ts_recv`, with fallback),
-  `max_sleep` (cap large gaps; re-anchors after a clamp), and `precise` (busy-wait
-  sub-millisecond gaps, since `Base.sleep` only resolves ~1 ms on Unix / ~15 ms on
-  Windows). `clock`/`sleep_fn` are injectable for deterministic testing.
 - `dbn_to_parquet` now compresses with **ZSTD by default** and accepts a `compression`
   keyword — one of `"zstd"` (default), `"snappy"`, `"gzip"`, or `"uncompressed"`.
-- Symbol resolution helpers that join the human-readable `raw_symbol` back onto
-  records using `Metadata.mappings`: `symbol_map(metadata)` builds an
-  `instrument_id -> [(start_date, end_date, raw_symbol)]` lookup,
-  `symbol_for(map_or_metadata, instrument_id, ts_event)` resolves the symbol
-  valid at a record's timestamp, `add_symbol_column!(df, metadata)` joins a
-  `:symbol` column onto a records DataFrame in place, and
-  `records_to_dataframe(records, metadata; symbols=true)` does the conversion +
-  join in one call. The join keys on `instrument_id`/`ts_event` (so it also works
-  for the row-expanded MBP-10 frame) and only applies when the query was resolved
-  with `stype_out = SType.INSTRUMENT_ID`.
 
 ### Fixed
 
@@ -104,6 +127,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `create_metadata_from_dataframe` (used by `parquet_to_dbn` / `csv_to_dbn`) no longer
   throws from `minimum`/`maximum` on a zero-row DataFrame; an empty frame yields
   `start_ts = end_ts = 0`, so a fully-empty Parquet/CSV round-trips back to DBN.
+
+## [0.1.4] - 2026-06-22
+
+### Added
+
+- Symbol resolution helpers that join the human-readable `raw_symbol` back onto
+  records using `Metadata.mappings`: `symbol_map(metadata)` builds an
+  `instrument_id -> [(start_date, end_date, raw_symbol)]` lookup,
+  `symbol_for(map_or_metadata, instrument_id, ts_event)` resolves the symbol
+  valid at a record's timestamp, `add_symbol_column!(df, metadata)` joins a
+  `:symbol` column onto a records DataFrame in place, and
+  `records_to_dataframe(records, metadata; symbols=true)` does the conversion +
+  join in one call. The join keys on `instrument_id`/`ts_event` (so it also works
+  for the row-expanded MBP-10 frame) and only applies when the query was resolved
+  with `stype_out = SType.INSTRUMENT_ID`.
+
+### Fixed
+
 - `records_to_dataframe` (and therefore `to_dataframe` / `dbn_to_parquet`) no
   longer throws `FieldError` on **TBBO / MBP-1** and **MBP-10**. The converters
   read non-existent flat `bid_px_00…` fields; the bid/ask data actually lives in
@@ -182,7 +223,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conversion to JSON/Parquet/CSV; byte-for-byte compatibility with the official
   Rust implementation ([#18], [#19]).
 
+[0.1.7]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tbeason/DatabentoBinaryEncoding.jl/compare/v0.1.0...v0.1.1

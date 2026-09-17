@@ -121,6 +121,8 @@ export foreach_cmbp1, foreach_cbbo1s, foreach_cbbo1m, foreach_tcbbo, foreach_bbo
 export replay_dbn, replay_records  # Timestamp-paced replay
 export compress_dbn_file, compress_daily_files
 export Schema, Compression, Encoding, SType, RType, Action, Side, InstrumentClass
+export StatType, TradingEvent, safe_stat_type, safe_trading_event
+export F_LAST, F_TOB, F_SNAPSHOT, F_MBP, F_BAD_TS_RECV, F_MAYBE_BAD_BOOK, F_PUBLISHER_SPECIFIC, has_flag
 export price_to_float, float_to_price, ts_to_datetime, datetime_to_ts, ts_to_date_time, date_time_to_ts, to_nanoseconds
 export record_length_bytes
 export DBN_VERSION, FIXED_PRICE_SCALE, UNDEF_PRICE, UNDEF_ORDER_SIZE, UNDEF_TIMESTAMP

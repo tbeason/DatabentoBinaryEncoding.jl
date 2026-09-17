@@ -251,6 +251,7 @@ Classification of financial instruments. Values match Databento's DBN
 - `CALL`: Call option contracts
 - `PUT`: Put option contracts
 - `FUTURE`: Futures contracts
+- `INDEX`: Index instruments
 - `BOND`: Fixed income securities
 - `MIXED_SPREAD`: Mixed spread instruments
 - `FUTURE_SPREAD`: Futures spread instruments
@@ -263,6 +264,7 @@ Classification of financial instruments. Values match Databento's DBN
     BOND = UInt8('B')
     CALL = UInt8('C')
     FUTURE = UInt8('F')
+    INDEX = UInt8('I')
     STOCK = UInt8('K')
     MIXED_SPREAD = UInt8('M')
     PUT = UInt8('P')
@@ -665,3 +667,158 @@ warning (once) and map to `InstrumentClass.OTHER`.
     end
     return @inbounds _INSTRUMENT_CLASS_LOOKUP[idx]
 end
+
+# ---------------------------------------------------------------------------
+# Venue-code enums and record flags
+#
+# `StatMsg.stat_type` and `StatusMsg.trading_event` stay raw `UInt16` on the
+# record structs: the wire fields are plain integers and publishers may emit
+# codes outside the published enum. The enums below are for *interpreting*
+# those codes. Compare with `r.stat_type == UInt16(StatType.SETTLEMENT_PRICE)`
+# or convert with `safe_stat_type(r.stat_type)` / `safe_trading_event(...)`.
+# ---------------------------------------------------------------------------
+
+"""
+    StatType
+
+Type of statistic carried by a [`StatMsg`](@ref) (`stat_type` field). Values
+match the official DBN `StatType` enum (`UInt16`). `UNKNOWN = 0` is a local
+sentinel returned by [`safe_stat_type`](@ref) for codes this package does not
+recognize (publisher-specific, or newer than this release).
+
+# Values
+- `OPENING_PRICE = 1`: Price of the first trade of an instrument
+- `INDICATIVE_OPENING_PRICE = 2`: Probable opening price, published pre-open
+- `SETTLEMENT_PRICE = 3`: Settlement price
+- `TRADING_SESSION_LOW_PRICE = 4`: Lowest trade price of the session
+- `TRADING_SESSION_HIGH_PRICE = 5`: Highest trade price of the session
+- `CLEARED_VOLUME = 6`: Contracts cleared on the previous trading date
+- `LOWEST_OFFER = 7`: Lowest offer price of the session
+- `HIGHEST_BID = 8`: Highest bid price of the session
+- `OPEN_INTEREST = 9`: Number of outstanding contracts
+- `FIXING_PRICE = 10`: VWAP over a fixing period
+- `CLOSE_PRICE = 11`: Last trade price of the session
+- `NET_CHANGE = 12`: Change from the previous session's close
+- `VWAP = 13`: Session volume-weighted average price
+- `VOLATILITY = 14`: Implied volatility associated with the settlement price
+- `DELTA = 15`: Option delta associated with the settlement price
+- `UNCROSSING_PRICE = 16`: Auction uncrossing price
+- `UPPER_PRICE_LIMIT = 17`: Exchange-defined upper price limit (published for
+  CME GLBX.MDP3 since the 2026-07 normalization change)
+- `LOWER_PRICE_LIMIT = 18`: Exchange-defined lower price limit (as above)
+- `BLOCK_VOLUME = 19`: Block contracts cleared on the previous trading date
+- `INDICATIVE_CLOSE_PRICE = 20`: Probable closing price
+- `MWCB_LEVEL_1 = 21`, `MWCB_LEVEL_2 = 22`, `MWCB_LEVEL_3 = 23`: Market-wide
+  circuit-breaker thresholds (7% / 13% / 20%)
+- `AUCTION_COLLAR_REFERENCE_PRICE = 24`, `AUCTION_COLLAR_UPPER_PRICE = 25`,
+  `AUCTION_COLLAR_LOWER_PRICE = 26`: Auction collar prices
+- `VENUE_SPECIFIC_VOLUME_1 = 10001`, `VENUE_SPECIFIC_PRICE_1 = 10002`:
+  Venue-specific statistics
+- `UNKNOWN = 0`: Unrecognized code (local sentinel, not part of the DBN spec)
+"""
+@enumx StatType::UInt16 begin
+    UNKNOWN = 0
+    OPENING_PRICE = 1
+    INDICATIVE_OPENING_PRICE = 2
+    SETTLEMENT_PRICE = 3
+    TRADING_SESSION_LOW_PRICE = 4
+    TRADING_SESSION_HIGH_PRICE = 5
+    CLEARED_VOLUME = 6
+    LOWEST_OFFER = 7
+    HIGHEST_BID = 8
+    OPEN_INTEREST = 9
+    FIXING_PRICE = 10
+    CLOSE_PRICE = 11
+    NET_CHANGE = 12
+    VWAP = 13
+    VOLATILITY = 14
+    DELTA = 15
+    UNCROSSING_PRICE = 16
+    UPPER_PRICE_LIMIT = 17
+    LOWER_PRICE_LIMIT = 18
+    BLOCK_VOLUME = 19
+    INDICATIVE_CLOSE_PRICE = 20
+    MWCB_LEVEL_1 = 21
+    MWCB_LEVEL_2 = 22
+    MWCB_LEVEL_3 = 23
+    AUCTION_COLLAR_REFERENCE_PRICE = 24
+    AUCTION_COLLAR_UPPER_PRICE = 25
+    AUCTION_COLLAR_LOWER_PRICE = 26
+    VENUE_SPECIFIC_VOLUME_1 = 10001
+    VENUE_SPECIFIC_PRICE_1 = 10002
+end
+
+"""
+    TradingEvent
+
+Additional context for a [`StatusMsg`](@ref) (`trading_event` field). Values
+match the official DBN `TradingEvent` enum (`UInt16`).
+
+# Values
+- `NONE = 0`: No additional information given
+- `NO_CANCEL = 1`: Order entry is allowed; modification and cancellation are not
+- `CHANGE_TRADING_SESSION = 2`: A change of trading session occurred; daily
+  statistics are reset
+- `IMPLIED_MATCHING_ON = 3`: Implied matching is available (CME's matching
+  engine is constructing implied depth)
+- `IMPLIED_MATCHING_OFF = 4`: Implied matching is not available
+
+CME GLBX.MDP3 publishes `IMPLIED_MATCHING_ON`/`OFF` status records since the
+2026-07 normalization change.
+"""
+@enumx TradingEvent::UInt16 begin
+    NONE = 0
+    NO_CANCEL = 1
+    CHANGE_TRADING_SESSION = 2
+    IMPLIED_MATCHING_ON = 3
+    IMPLIED_MATCHING_OFF = 4
+end
+
+const _STAT_TYPE_LOOKUP = Dict{UInt16,StatType.T}(UInt16(v) => v for v in instances(StatType.T))
+const _TRADING_EVENT_LOOKUP = Dict{UInt16,TradingEvent.T}(UInt16(v) => v for v in instances(TradingEvent.T))
+
+"""
+    safe_stat_type(raw::Integer) -> StatType.T
+
+Interpret a raw `StatMsg.stat_type` code. Unrecognized codes map to
+`StatType.UNKNOWN` without a warning (publisher-specific codes are legitimate).
+"""
+safe_stat_type(raw::Integer) = get(_STAT_TYPE_LOOKUP, UInt16(raw), StatType.UNKNOWN)
+
+"""
+    safe_trading_event(raw::Integer) -> TradingEvent.T
+
+Interpret a raw `StatusMsg.trading_event` code. Unrecognized codes map to
+`TradingEvent.NONE` ("no additional information") without a warning.
+"""
+safe_trading_event(raw::Integer) = get(_TRADING_EVENT_LOOKUP, UInt16(raw), TradingEvent.NONE)
+
+# Record `flags` bit field (MBO / MBP / trade / BBO records). Values match the
+# official DBN `flags` module.
+
+"""
+Flag bit: last record in the event for a given `instrument_id`. Since the
+2026-07 CME normalization change, GLBX.MDP3 MBO emits this on a standalone
+record (`action = Action.NONE`, `price = UNDEF_PRICE`, `size = 0`) that
+follows the book updates, rather than on the final book update itself.
+"""
+const F_LAST = 0x80
+"""Flag bit: top-of-book record, not an individual order."""
+const F_TOB = 0x40
+"""Flag bit: record sourced from a replay, such as a snapshot server."""
+const F_SNAPSHOT = 0x20
+"""Flag bit: aggregated price-level record, not an individual order."""
+const F_MBP = 0x10
+"""Flag bit: `ts_recv` is inaccurate due to clock issues or packet reordering."""
+const F_BAD_TS_RECV = 0x08
+"""Flag bit: an unrecoverable gap was detected in the channel."""
+const F_MAYBE_BAD_BOOK = 0x04
+"""Flag bit: publisher-specific event."""
+const F_PUBLISHER_SPECIFIC = 0x02
+
+"""
+    has_flag(flags, flag) -> Bool
+
+`true` if the `flag` bit (e.g. [`F_LAST`](@ref)) is set in a record's `flags`.
+"""
+has_flag(flags::Integer, flag::Integer) = (flags & flag) != 0

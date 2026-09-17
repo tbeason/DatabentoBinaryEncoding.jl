@@ -25,6 +25,7 @@ include("test_utils.jl")
     include("test_show.jl")  # compact one-line Base.show for record types
     include("test_symbols.jl")  # symbol_map / symbol_for / add_symbol_column! / records_to_dataframe(records, metadata)
     include("test_issue40_mbp_dataframe.jl")  # regression: MBP-1/MBP-10/BBO records_to_dataframe via nested levels (issue #40)
+    include("test_cme_2026_07.jl")  # CME 2026-07 normalization: per-leg defs, standalone F_LAST, StatType/TradingEvent enums, flags
     include("test_mbo_wire_layout.jl")  # regression: MBOMsg wire layout (order_id/price/ts_recv offsets) vs Databento's own fixtures
     include("test_stat_quantity_sentinel.jl")  # regression: v3 StatMsg UNDEF quantity written as typemax(Int64), not -1
 
