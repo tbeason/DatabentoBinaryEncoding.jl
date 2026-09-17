@@ -280,17 +280,17 @@ Each record type is serialized according to its specific binary layout.
     unsafe_write(encoder.io, Ref(record), sizeof(record))
 end
 
-# Specialized optimized write for MBOMsg with field reordering
+# Specialized optimized write for MBOMsg
 @inline function write_record(encoder::DBNEncoder, record::MBOMsg)
-    # MBOMsg requires custom serialization: struct field order != binary order
-    # Binary order: hd → ts_recv → order_id → size → flags → channel_id → action → side → price → ts_in_delta → sequence
-    # Struct order: hd → order_id → price → size → flags → channel_id → action → side → ts_recv → ts_in_delta → sequence
+    # Wire order == struct order (official DBN MboMsg): hd -> order_id -> price -> size -> flags
+    #   -> channel_id -> action -> side -> ts_recv -> ts_in_delta -> sequence. (Through 0.1.6 this
+    #   writer mirrored the decoder's swapped order_id/ts_recv/price layout; see CHANGELOG.)
     #
     # Performance: This IOBuffer approach achieves 1.4x speedup (40% faster) compared to field-by-field write()
     # by batching all fields into a buffer and performing a single write operation (2.1M vs 1.5M records/sec).
     # The reduction in IO syscalls more than compensates for the temporary 56-byte allocation per record.
 
-    # Use IOBuffer to reorder fields, then write in one operation
+    # Batch all fields into a buffer, then write in one operation
     buffer = IOBuffer()
 
     # Write header (16 bytes)
@@ -301,14 +301,14 @@ end
     write(buffer, record.hd.ts_event)
 
     # Write body in binary order (40 bytes)
-    write(buffer, record.ts_recv)
     write(buffer, record.order_id)
+    write(buffer, record.price)
     write(buffer, record.size)
     write(buffer, record.flags)
     write(buffer, record.channel_id)
     write(buffer, UInt8(record.action))
     write(buffer, UInt8(record.side))
-    write(buffer, record.price)
+    write(buffer, record.ts_recv)
     write(buffer, record.ts_in_delta)
     write(buffer, record.sequence)
 
@@ -623,9 +623,9 @@ function write_record_complex(encoder::DBNEncoder, record)
         write(io, record.ts_recv)
         write(io, record.ts_ref)
         write(io, record.price)
-        # Write quantity as UInt64, converting back if needed
-        quantity_to_write = record.quantity == typemax(Int64) ? 0xffffffffffffffff : UInt64(record.quantity)
-        write(io, quantity_to_write)
+        # quantity is a signed Int64 on the wire; the v3 UNDEF sentinel is typemax(Int64)
+        # (0x7fff...). Through 0.1.6 this wrote 0xffffffffffffffff (-1) for UNDEF instead.
+        write(io, record.quantity)
         write(io, record.sequence)
         write(io, record.ts_in_delta)
         write(io, record.stat_type)

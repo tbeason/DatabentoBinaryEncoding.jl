@@ -122,6 +122,14 @@ import DatabentoBinaryEncoding as DBN
         @test DBN._resolve_sleep_fn(custom, true) === custom
     end
 
+    @testset "default pacing clock is monotonic" begin
+        t1 = DBN._monotonic_seconds()
+        yield()
+        t2 = DBN._monotonic_seconds()
+        @test isfinite(t1)
+        @test t2 >= t1
+    end
+
     @testset "_precise_sleep does not return early" begin
         # Zero / negative is a no-op.
         @test DBN._precise_sleep(0) === nothing

@@ -54,6 +54,8 @@ means time spent inside `f` is absorbed instead of accumulating as drift — a
 slow callback simply shortens the next wait rather than pushing every
 subsequent record later.
 """
+_monotonic_seconds() = time_ns() / 1.0e9
+
 function _replay_loop(f::Function, produce::Function;
                       speed::Real,
                       timestamp::Symbol,
@@ -160,7 +162,7 @@ end
                timestamp::Symbol = :ts_event,
                max_sleep::Union{Real,Nothing} = nothing,
                precise::Bool = false,
-               clock::Function = time,
+               clock::Function = _monotonic_seconds,
                sleep_fn::Union{Function,Nothing} = nothing) -> Int
 
 Replay a DBN file, invoking `f(record)` for each record paced in real time
@@ -183,7 +185,8 @@ like [`DBNStream`](@ref). Records are delivered in file order.
 - `precise`: when `true`, busy-wait sub-millisecond gaps instead of using
   `Base.sleep`. See the timing-resolution note below.
 - `clock` / `sleep_fn`: injection points for the wall clock and sleep function,
-  primarily for testing. `clock` defaults to `Base.time`. An explicit `sleep_fn`
+  primarily for testing. `clock` defaults to a monotonic clock derived from
+  `Base.time_ns`, so NTP or manual wall-clock adjustments cannot distort pacing. An explicit `sleep_fn`
   overrides `precise`; when left as `nothing` the sleeper is `Base.sleep`
   (or the precise busy-wait sleeper when `precise = true`).
 
@@ -224,7 +227,7 @@ function replay_dbn(f::Function, filename::AbstractString;
                     timestamp::Symbol = :ts_event,
                     max_sleep::Union{Real,Nothing} = nothing,
                     precise::Bool = false,
-                    clock::Function = time,
+                    clock::Function = _monotonic_seconds,
                     sleep_fn::Union{Function,Nothing} = nothing)
     sleeper = _resolve_sleep_fn(sleep_fn, precise)
     decoder = DBNDecoder(String(filename))
@@ -256,7 +259,7 @@ end
                    timestamp::Symbol = :ts_event,
                    max_sleep::Union{Real,Nothing} = nothing,
                    precise::Bool = false,
-                   clock::Function = time,
+                   clock::Function = _monotonic_seconds,
                    sleep_fn::Union{Function,Nothing} = nothing) -> Int
 
 Replay an in-memory collection of records (e.g. the result of [`read_dbn`](@ref)),
@@ -280,7 +283,7 @@ function replay_records(f::Function, records;
                         timestamp::Symbol = :ts_event,
                         max_sleep::Union{Real,Nothing} = nothing,
                         precise::Bool = false,
-                        clock::Function = time,
+                        clock::Function = _monotonic_seconds,
                         sleep_fn::Union{Function,Nothing} = nothing)
     sleeper = _resolve_sleep_fn(sleep_fn, precise)
     next = iterate(records)

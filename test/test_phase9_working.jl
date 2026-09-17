@@ -415,13 +415,17 @@ using Dates
     
     @testset "Write Permission Errors" begin
         @testset "Read-only directory" begin
-            # This test might not work in all environments
-            # Try to write to a system directory
-            readonly_paths = ["/", "/etc", "/usr"]
-            
-            for path in readonly_paths
-                if isdir(path) && !Sys.iswindows()  # Skip on Windows
-                    readonly_file = joinpath(path, "test_dbn_readonly.dbn")
+            # Root can write to these paths despite their permissions, so the
+            # assertion is not meaningful in root-run containers.
+            if Sys.iswindows() || Base.Libc.geteuid() == 0
+                @test_skip false
+            else
+                # Try to write to a system directory
+                readonly_paths = ["/", "/etc", "/usr"]
+
+                for path in readonly_paths
+                    if isdir(path)
+                        readonly_file = joinpath(path, "test_dbn_readonly.dbn")
                     
                     metadata = Metadata(
                         UInt8(3),                    # version
@@ -439,9 +443,10 @@ using Dates
                         Tuple{String,String,Int64,Int64}[]  # mappings
                     )
                     
-                    # Should throw an error when trying to write
-                    @test_throws Exception write_dbn(readonly_file, metadata, TradeMsg[])
-                    break  # Only need one successful test
+                        # Should throw an error when trying to write
+                        @test_throws Exception write_dbn(readonly_file, metadata, TradeMsg[])
+                        break  # Only need one successful test
+                    end
                 end
             end
         end
