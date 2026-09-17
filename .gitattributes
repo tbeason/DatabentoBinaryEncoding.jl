@@ -1,0 +1,13 @@
+# Line-ending policy lives here, not in each contributor's core.autocrlf.
+# `text=auto` canonicalizes every file git detects as text to LF *in the
+# repository*; working trees may still use CRLF on Windows if that's the
+# local preference.
+* text=auto
+
+# Binary fixtures. These are byte-compared by the round-trip tests, so make
+# their exemption explicit rather than relying on git's NUL-byte heuristic.
+# (`binary` is shorthand for `-text -diff`.)
+*.dbn  binary
+*.dbz  binary
+*.zst  binary
+*.frag binary
